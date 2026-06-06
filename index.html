@@ -465,6 +465,13 @@
       box-shadow: none;
     }
 
+    .button.ghost {
+      background: transparent;
+      color: var(--text);
+      border-color: color-mix(in srgb, var(--green) 52%, var(--border));
+      box-shadow: none;
+    }
+
     main {
       width: min(1180px, calc(100% - 36px));
       margin: 0 auto;
@@ -529,6 +536,158 @@
     .card p {
       margin-bottom: 0;
       color: var(--muted);
+    }
+
+    .download-panel {
+      display: grid;
+      grid-template-columns: 1.12fr 0.88fr;
+      gap: 18px;
+      align-items: stretch;
+      overflow: hidden;
+      position: relative;
+      padding: clamp(20px, 4vw, 34px);
+    }
+
+    .download-panel::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -120px auto;
+      width: 320px;
+      height: 320px;
+      background:
+        radial-gradient(circle, var(--green-soft), transparent 66%),
+        radial-gradient(circle at 28% 32%, var(--pink-soft), transparent 58%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .download-panel > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .download-panel h2 {
+      margin-top: 0;
+    }
+
+    .download-panel p {
+      max-width: 700px;
+    }
+
+    .download-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .download-details {
+      display: grid;
+      gap: 12px;
+    }
+
+    .download-detail {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .download-detail span {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      background: var(--green-soft);
+      color: var(--green);
+      border: 1px solid color-mix(in srgb, var(--green) 46%, var(--border));
+      border-radius: 8px;
+      font-weight: 900;
+    }
+
+    .download-detail:nth-child(even) span {
+      background: var(--pink-soft);
+      color: var(--pink);
+      border-color: color-mix(in srgb, var(--pink) 46%, var(--border));
+    }
+
+    .download-detail h3 {
+      margin-bottom: 4px;
+    }
+
+    .setup-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 260px;
+    }
+
+    .setup-number {
+      display: inline-grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      margin-bottom: 16px;
+      background: var(--green);
+      color: #061411;
+      border-radius: 8px;
+      font-weight: 900;
+    }
+
+    .setup-card:nth-child(even) .setup-number {
+      background: var(--pink);
+      color: #180710;
+    }
+
+    .setup-card h3 {
+      font-size: 1.14rem;
+    }
+
+    .setup-list {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .setup-list li {
+      padding: 13px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+    }
+
+    .setup-list strong {
+      display: block;
+      color: var(--text);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      padding: 7px 10px;
+      background: var(--green-soft);
+      color: var(--green);
+      border: 1px solid color-mix(in srgb, var(--green) 46%, var(--border));
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 800;
+    }
+
+    .pill:nth-child(even) {
+      background: var(--pink-soft);
+      color: var(--pink);
+      border-color: color-mix(in srgb, var(--pink) 46%, var(--border));
     }
 
     .metric {
@@ -774,7 +933,8 @@
       .grid.four,
       .grid.three,
       .grid.two,
-      .architecture {
+      .architecture,
+      .download-panel {
         grid-template-columns: 1fr;
       }
 
@@ -804,7 +964,8 @@
       }
 
       .hero-actions,
-      .quick-links {
+      .quick-links,
+      .download-actions {
         flex-direction: column;
       }
 
@@ -828,6 +989,8 @@
       <span>Face Tracker</span>
     </a>
     <nav class="nav" aria-label="Project sections">
+      <a href="#download">Download</a>
+      <a href="#setup">Setup</a>
       <a href="#workflow">Workflow</a>
       <a href="#architecture">Architecture</a>
       <a href="#files">Files</a>
@@ -862,14 +1025,51 @@
         configurable COM port.
       </p>
       <div class="hero-actions">
-        <a class="button" href="face_tracker_gui.py">Open GUI Launcher</a>
-        <a class="button secondary" href="custom face/face_tracker_lbph.py">View Tracker Script</a>
-        <a class="button secondary" href="facearduino/facearduino.ino">View Arduino Sketch</a>
+        <a class="button" href="https://github.com/Vash-Codex/Servo-Facial-Tracking/archive/refs/heads/main.zip">
+          Download Full Project
+        </a>
+        <a class="button secondary" href="#setup">Setup Guide</a>
+        <a class="button ghost" href="https://github.com/Vash-Codex/Servo-Facial-Tracking">View GitHub Repo</a>
       </div>
     </div>
   </section>
 
   <main>
+    <section id="download" aria-labelledby="download-title">
+      <div class="card download-panel">
+        <div>
+          <span class="eyebrow">One-click project ZIP</span>
+          <h2 id="download-title">Download everything from this website</h2>
+          <p>
+            Click once to download the latest public project files from GitHub as a ZIP. After
+            extraction, the project can run locally from the included Python scripts and Arduino sketch.
+          </p>
+          <div class="download-actions">
+            <a class="button" href="https://github.com/Vash-Codex/Servo-Facial-Tracking/archive/refs/heads/main.zip">
+              Download Project ZIP
+            </a>
+            <a class="button secondary" href="#setup">Read Setup Steps</a>
+          </div>
+        </div>
+        <div class="download-details" aria-label="Download details">
+          <article class="download-detail">
+            <span>ZIP</span>
+            <div>
+              <h3>Whole public repo</h3>
+              <p>Downloads the source code, website, GUI launcher, tracker scripts, and Arduino sketch.</p>
+            </div>
+          </article>
+          <article class="download-detail">
+            <span>SAFE</span>
+            <div>
+              <h3>Private data stays local</h3>
+              <p>Your face dataset, trained model, and demo recordings are generated on your computer.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section aria-labelledby="snapshot-title">
       <div class="section-title">
         <h2 id="snapshot-title">Project Snapshot</h2>
@@ -878,8 +1078,8 @@
       <div class="grid four">
         <article class="card metric">
           <span>Training Images</span>
-          <strong>Store Images</strong>
-          <p>Store as many as you want as Training Data</p>
+          <strong>Local</strong>
+          <p>Capture your own samples into the private dataset folder.</p>
         </article>
         <article class="card metric">
           <span>Recognition Model</span>
@@ -895,6 +1095,82 @@
           <span>Controller</span>
           <strong>GUI</strong>
           <p>Modern Tkinter parent launcher with themes and COM settings.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="setup" aria-labelledby="setup-title">
+      <div class="section-title">
+        <h2 id="setup-title">Setup Guide</h2>
+        <p>Follow these steps after downloading the ZIP so Python, OpenCV, LBPH, and Arduino all line up cleanly.</p>
+      </div>
+      <div class="grid two">
+        <article class="card setup-card">
+          <span class="setup-number">01</span>
+          <h3>Download and open the project</h3>
+          <p>
+            Extract the ZIP, open the extracted folder in VS Code or a terminal, and keep the folder
+            structure unchanged so the GUI can find the trainer, tracker, dataset, and Arduino sketch.
+          </p>
+          <pre class="code"><code>cd Servo-Facial-Tracking-main</code></pre>
+        </article>
+        <article class="card setup-card">
+          <span class="setup-number">02</span>
+          <h3>Create a Python environment</h3>
+          <p>Use a virtual environment so OpenCV and PySerial install only for this project.</p>
+          <pre class="code"><code>py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt</code></pre>
+        </article>
+        <article class="card setup-card">
+          <span class="setup-number">03</span>
+          <h3>Prepare the Arduino servo</h3>
+          <p>
+            Open <code>facearduino/facearduino.ino</code> in Arduino IDE, attach the servo signal wire
+            to pin <code>9</code>, connect power and ground, upload the sketch, then copy the port name
+            shown by the IDE.
+          </p>
+          <div class="pill-row">
+            <span class="pill">Signal D9</span>
+            <span class="pill">Baud 9600</span>
+            <span class="pill">Example COM10</span>
+          </div>
+        </article>
+        <article class="card setup-card">
+          <span class="setup-number">04</span>
+          <h3>Launch, train, and track</h3>
+          <p>
+            Start the dashboard, capture face samples with the trainer, let it write
+            <code>custom face/face_model.xml</code>, then run the LBPH tracker with Arduino access on or off.
+          </p>
+          <pre class="code"><code>python face_tracker_gui.py</code></pre>
+        </article>
+      </div>
+      <div class="grid three" style="margin-top: 14px;">
+        <article class="card">
+          <h3>Required software</h3>
+          <ul class="setup-list">
+            <li><strong>Python 3</strong>Runs the GUI, trainer, OpenCV tracker, and serial bridge.</li>
+            <li><strong>Arduino IDE</strong>Uploads the servo sketch when hardware tracking is enabled.</li>
+            <li><strong>Webcam</strong>Captures training samples and live tracking frames.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Training controls</h3>
+          <ul class="setup-list">
+            <li><strong>Space</strong>Captures a detected face sample during training.</li>
+            <li><strong>Q</strong>Finishes training and lets the model save locally.</li>
+            <li><strong>Run LBPH Tracker</strong>Starts recognition after the model exists.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Generated locally</h3>
+          <ul class="setup-list">
+            <li><strong>dataset/</strong>Your captured face images.</li>
+            <li><strong>custom face/face_model.xml</strong>The trained LBPH recognition model.</li>
+            <li><strong>Keep private</strong>Do not publish personal face data unless you mean to.</li>
+          </ul>
         </article>
       </div>
     </section>
@@ -1018,8 +1294,10 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
           </ul>
         </article>
         <article class="card">
-          <h3>Assets And Hardware</h3>
+          <h3>Setup And Hardware</h3>
           <ul class="file-list">
+            <li><a href="README.md">README.md <span>quick setup notes</span></a></li>
+            <li><a href="requirements.txt">requirements.txt <span>Python dependencies</span></a></li>
             <li><a href="facearduino/facearduino.ino">facearduino.ino <span>servo sketch</span></a></li>
             <li><div class="private-item">face_model.xml <span>private local model</span></div></li>
             <li><div class="private-item">dataset/ <span>private face images</span></div></li>
