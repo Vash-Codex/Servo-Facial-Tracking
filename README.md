@@ -1,120 +1,436 @@
+# Servo Facial Tracking
 
-```markdown
-# Servo Facial Tracking Dashboard
+A Python-based face recognition and tracking system that trains a custom **Local Binary Patterns Histograms (LBPH)** model on your face, detects you in real time through a webcam, and optionally drives an Arduino servo to follow your horizontal movement.
 
-A Python-powered face recognition and physical tracking system. This project utilizes computer vision to capture and train a custom Local Binary Patterns Histograms (LBPH) biometric model, track your face in real-time using an OpenCV Haar Cascade, and smoothly steer a hardware Arduino servo to follow your movements. 
-
-The entire workflow is managed through a modern, themed Tkinter GUI desktop controller dashboard.
+The full workflow is managed from a themed **Tkinter control dashboard** — capture samples, train the model, launch tracking, and configure serial hardware without touching the command line.
 
 ---
 
-## 🚀 Features
+## Table of Contents
 
-- **Tkinter Parent Dashboard:** A clean, modern desktop graphical interface with multiple selectable color themes (Midnight, Daylight, Mint, Rose) to configure settings and launch sub-modules easily.
-- **Biometric Training Suite:** Capture personal face samples locally with visual feedback and train a private LBPH recognition model (`face_model.xml`).
-- **Real-Time Video Processing:** High-performance face detection using OpenCV Haar Cascades combined with custom LBPH verification.
-- **Hardware Integration:** Translates coordinates to mapping angles ($45^\circ - 135^\circ$) and streams commands over serial (`pySerial`) to an Arduino board.
-- **Privacy-First Architecture:** All training image datasets, biometric model XMLs, and video recordings remain strictly on your local machine.
+- [Overview](#overview)
+- [Features](#features)
+- [System Requirements](#system-requirements)
+- [Hardware & Wiring](#hardware--wiring)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Guide](#usage-guide)
+- [Keyboard Controls](#keyboard-controls)
+- [Configuration Reference](#configuration-reference)
+- [Architecture](#architecture)
+- [Privacy & Local Data](#privacy--local-data)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ---
 
-## 🛠️ System Architecture & Workflow
+## Overview
 
+| Component | Role |
+|-----------|------|
+| **Webcam** | Captures training samples and live tracking frames |
+| **OpenCV Haar Cascade** | Locates face bounding boxes in each frame |
+| **LBPH Recognizer** | Verifies the detected face matches your trained identity |
+| **Python + PySerial** | Maps face position to a servo angle and sends it over serial |
+| **Arduino (Uno / Nano)** | Receives angle commands and drives the servo on pin D9 |
+
+**Typical workflow:** Capture face samples → train LBPH model → run tracker → servo pans to keep your face centered.
+
+---
+
+## Features
+
+- **Control dashboard** — Launch trainer, LBPH tracker, or basic tracker from one GUI with live activity logging
+- **Custom face training** — Capture normalized 200×200 face crops locally and build a private `face_model.xml`
+- **LBPH verification** — Only tracks faces that match your trained identity (label `0`, confidence threshold `< 70`)
+- **Smooth servo mapping** — Position averaging, deadzone, velocity limiting, and easing reduce jitter
+- **Manual override** — Nudge the servo with momentum using `A` / `D` keys
+- **Optional hardware** — Run recognition-only without Arduino, or enable serial control from the GUI
+- **Privacy-first** — Dataset images, trained models, and demo recordings stay on your machine
+
+---
+
+## System Requirements
+
+### Software
+
+| Tool | Purpose |
+|------|---------|
+| **Python 3.10+** | GUI, trainer, tracker, and serial bridge |
+| **Arduino IDE** | Upload the servo sketch to your board |
+| **Webcam** | Training capture and live tracking |
+
+### Python Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `opencv-contrib-python` | Face detection, LBPH training/recognition |
+| `numpy` | Angle math and smoothing |
+| `pyserial` | Arduino serial communication |
+
+### Hardware
+
+| Part | Notes |
+|------|-------|
+| **Arduino Uno or Nano** | Any board supported by the Servo library |
+| **Standard hobby servo** | SG90, MG90S, or similar (180° range) |
+| **Jumper wires** | Signal, power, and ground |
+| **USB cable** | Arduino programming and serial link to PC |
+| **External 5 V supply** *(recommended)* | For larger servos — see [Power notes](#power-notes) |
+
+---
+
+## Hardware & Wiring
+
+### Pin Summary
+
+| Connection | Arduino Pin | Servo Wire (typical) |
+|------------|-------------|----------------------|
+| Signal | **D9** | Orange or yellow |
+| Power (VCC) | **5 V** | Red |
+| Ground (GND) | **GND** | Brown or black |
+
+> **Serial settings:** 9600 baud. Python sends one angle per line (e.g. `90\n`). Valid range on the Arduino side is clamped to **0–180°**; the tracker maps face position to **45–135°** by default.
+
+---
+
+### Wiring Diagram — Arduino Uno
 
 ```
-[ Webcam Input ]
-│
-▼
-[ Grayscale / Haar Cascade Detection ] ──► [ Local LBPH Recognition Check ]
-│
-▼
-[ Coordinate Smoothing & Angle Mapping ]
-│
-▼ (Via Configuration GUI over Serial)
-[ Arduino Nano/Uno / Pin D9 ] ──► [ Servo Movement (45°-135°) ]
+                    ┌─────────────────────────────┐
+                    │        ARDUINO UNO          │
+                    │                             │
+    PC (USB) ───────┤ USB                         │
+                    │                             │
+                    │  D9  ●──────────────────────┼────── Signal (Orange/Yellow)
+                    │                             │              │
+                    │  5V  ●──────────────────────┼────── VCC (Red)
+                    │                             │              │
+                    │ GND  ●──────────────────────┼────── GND (Brown/Black)
+                    │                             │              │
+                    └─────────────────────────────┘              │
+                                                                   ▼
+                                                          ┌────────────────┐
+                                                          │  SERVO MOTOR   │
+                                                          │   (SG90 etc.)  │
+                                                          └────────────────┘
 ```
-
-1. **Capture:** Run the trainer through the GUI dashboard to crop and save localized face samples.
-2. **Train:** The pipeline processes the images, assigns labels, and compiles your local weights file.
-3. **Track:** The tracker reads your video stream, ensures authentication matching, smooths target jitter, and calculates dynamic pan/tilt vectors.
-4. **Control:** Hardware flags (`FACE_TRACKER_USE_ARDUINO`) and chosen serial communication lines (e.g., `COM10`) are cleanly passed from the master dashboard script.
 
 ---
 
-## 📁 Repository Structure
+### Wiring Diagram — Arduino Nano
 
-```text
+```
+                    ┌─────────────────────────────┐
+                    │       ARDUINO NANO          │
+                    │                             │
+    PC (USB) ───────┤ Mini-USB / USB-C            │
+                    │                             │
+                    │  D9  ●──────────────────────┼────── Signal
+                    │  5V  ●──────────────────────┼────── VCC
+                    │ GND  ●──────────────────────┼────── GND
+                    │                             │
+                    └─────────────────────────────┘
+                                    │
+                                    ▼
+                              [ Servo Motor ]
+```
+
+---
+
+### Recommended Setup — External Power (larger servos)
+
+Small SG90 servos can often run from the Arduino 5 V pin. Heavier servos should use a **separate 5 V supply** with a **shared ground**:
+
+```
+   ┌──────────────┐                              ┌──────────────┐
+   │  5V Supply   │                              │   ARDUINO    │
+   │  (+ terminal)├──────────────────────────────┤ 5V (optional)│
+   │  (- terminal)├───┬──────────────────────────┤ GND          │
+   └──────────────┘   │                          │ D9 ── Signal │
+                      │                          └──────┬───────┘
+                      │                                 │
+                      │         ┌───────────────────────┤
+                      │         │                       │
+                      ▼         ▼                       ▼
+                 ┌─────────────────────────────────────────┐
+                 │              SERVO MOTOR                  │
+                 │   GND ◄── shared ground                   │
+                 │   VCC ◄── 5V from external supply         │
+                 │   SIG ◄── D9 from Arduino                 │
+                 └─────────────────────────────────────────┘
+```
+
+> **Important:** Always connect the external supply **GND** to Arduino **GND**. Never power a high-current servo only through the Arduino 5 V pin.
+
+---
+
+### Signal Flow
+
+```mermaid
+flowchart LR
+    A[Webcam] --> B[OpenCV Frame]
+    B --> C[Haar Cascade Detection]
+    C --> D[LBPH Recognition]
+    D --> E[Angle Mapping 45°–135°]
+    E --> F[PySerial COM Port]
+    F --> G[Arduino D9]
+    G --> H[Servo Motor]
+```
+
+---
+
+## Project Structure
+
+```
+face tracker/
+├── face_tracker_gui.py          # Main dashboard — start here
+├── face.py                      # Basic Haar-only tracker (no LBPH)
+├── requirements.txt             # Python dependencies
+├── README.md
+│
 ├── custom face/
-│   ├── face_tracker_lbph.py   # Core facial recognition tracker
-│   └── train_lbph.py          # Captures dataset frames and outputs trained weights
+│   ├── train_lbph.py            # Capture samples + train model
+│   ├── face_tracker_lbph.py     # LBPH recognition + servo tracking
+│   └── face_model.xml           # Generated after training (local)
+│
+├── dataset/                     # Generated face images (local, private)
+│
 ├── facearduino/
-│   └── facearduino.ino        # Arduino C++ sketch managing servo hardware lines
-├── face_tracker_gui.py        # Central master Tkinter application dashboard
-├── face.py                    # Independent basic webcam tracker snippet
-├── requirements.txt           # Specified library dependencies
-└── README.md                  # System instruction sheet
-
+│   └── facearduino.ino          # Arduino sketch — upload to board
+│
+└── vids/                        # Optional demo recordings (local)
 ```
-*Note: The project automatically generates the private local directories dataset/ and custom face/face_model.xml during runtime configuration.*
-## ⚙️ Installation & Setup Guide
-### 1. Project Initialization
-Clone this repository or extract the downloaded source files. Keep the file directory layout intact so the GUI relative paths find their corresponding sub-modules:
-```bash
-git clone [https://github.com/Vash-Codex/Servo-Facial-Tracking.git](https://github.com/Vash-Codex/Servo-Facial-Tracking.git)
-cd Servo-Facial-Tracking
 
+---
+
+## Installation
+
+### 1. Clone or download the project
+
+Keep the folder layout intact so the GUI can resolve relative paths to scripts, the dataset, and the Arduino sketch.
+
+```powershell
+cd "C:\path\to\face tracker"
 ```
-### 2. Configure Python Virtual Environment
-It is highly recommended to isolate the project dependencies using a python virtual environment:
-```bash
-# Create environment
-python -m venv .venv
 
-# Activate on Windows (PowerShell)
+### 2. Create a virtual environment
+
+```powershell
+py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# Activate on Linux/macOS
-source .venv/bin/activate
-
-# Upgrade pip and install required components
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-
 ```
-### 3. Setup the Hardware Link (Arduino)
- 1. Launch your **Arduino IDE**.
- 2. Open the file facearduino/facearduino.ino.
- 3. Connect your micro-controller to your machine.
- 4. Wiring layout:
-   * Connect the Servo **Signal Wire** to Digital Pin **9**.
-   * Connect the Servo **Power (VCC)** and **Ground (GND)** lines to the appropriate board rails.
- 5. Upload the code file. Take note of the active device port assigned by the IDE (e.g., COM10 or /dev/ttyUSB0).
-## 🎮 Execution & Runtime Operation
-Run the main application using the virtual environment interpreter:
-```bash
+
+### 3. Upload the Arduino sketch
+
+1. Open `facearduino/facearduino.ino` in the **Arduino IDE**
+2. Wire the servo to **D9**, **5V**, and **GND** (see [wiring diagrams](#hardware--wiring))
+3. Select your board (Uno / Nano) and the correct **COM port**
+4. Upload the sketch
+5. Note the COM port name shown in the IDE (e.g. `COM10`) — you will enter it in the GUI
+
+### 4. Verify setup
+
+From the project folder with the venv active:
+
+```powershell
+python -c "import cv2; cv2.face.LBPHFaceRecognizer_create(); print('OK')"
+```
+
+You can also click **Check Setup** in the dashboard sidebar.
+
+---
+
+## Quick Start
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 python face_tracker_gui.py
+```
+
+1. **Train** — Click *Start Training*, press **Space** when your face is detected, press **Q** when finished
+2. **Configure hardware** — Enter your COM port and toggle **Arduino ON** if using a servo
+3. **Track** — Click *Start Tracker* to run the LBPH tracker with your trained model
+
+---
+
+## Usage Guide
+
+### Step 1 — Train your face model
+
+Launch **Train Face Model** from the dashboard (or run `custom face/train_lbph.py` directly).
+
+| Action | Key |
+|--------|-----|
+| Capture a face sample | **Space** |
+| Finish and save model | **Q** |
+
+- Samples are saved to `dataset/` as 200×200 grayscale crops
+- Training produces `custom face/face_model.xml`
+- Aim for **20–50 varied samples** (different angles, lighting, distance) for reliable recognition
+
+### Step 2 — Configure Arduino (optional)
+
+In the **Arduino Access** panel:
+
+| Setting | Description |
+|---------|-------------|
+| **Arduino ON/OFF** | Enables serial output when starting a tracker |
+| **COM Port** | Your board's port (e.g. `COM10`) — click **Use** to apply |
+
+These values are passed as environment variables when a tracker starts:
 
 ```
-### 🔹 Interface Steps
- 1. Select your application color layout styling (Midnight, Daylight, Mint, Rose).
- 2. Enter your Arduino's identified **COM Port** name in the input box and toggle **Arduino Access** if hardware integration is ready.
- 3. Launch the **Trainer Script**. Face the camera and use your runtime controls to build your data footprint.
- 4. Close the training script to auto-generate your local model, then click **Run LBPH Tracker**.
-### ⌨️ Interactive Command Keys
-| Mode | Key Binding | Action Command |
-|---|---|---|
-| **Training Pipeline** | Spacebar | Captures a bounding-box face sample frame into dataset/ |
-|  | Q | Halts sampling, executes compiler, and saves model file |
-| **Tracking Module** | Q | Gracefully closes tracking module window feed |
-|  | C | Immediately centers tracking target angle vectors |
-|  | R | Shifts servo axis boundary back to the minimum angle configuration |
-|  | I | Inverts hardware orientation tracking steering loops |
-|  | P | Pauses real-time dynamic hardware communication packets |
-| **Manual Override** | A / D | Manually nudges the servo angle configuration using momentum vectors |
-## 🔒 Privacy & Local Security Notice
-Biometric records, visual images compiled in your dataset/ folder, generated training weights, and tracking demo video recordings remain completely offline. Ensure you do not accidentally commit or push your generated .xml or image directories to public platforms.
-## 📄 License
-This project is open-source and available under the MIT License.
+FACE_TRACKER_USE_ARDUINO=1
+FACE_TRACKER_COM_PORT=COM10
 ```
-https://vash-codex.github.io/Servo-Facial-Tracking/#setup
+
+### Step 3 — Run the LBPH tracker
+
+Launch **Run LBPH Tracker** after `face_model.xml` exists.
+
+The tracker will:
+
+1. Open the webcam (DirectShow on Windows)
+2. Detect faces with a Haar cascade
+3. Run LBPH recognition — only **your** face (label `0`, confidence `< 70`) drives the servo
+4. Map horizontal face position to a servo angle between **45°** and **135°**
+5. Send angles over serial at 9600 baud when Arduino access is enabled
+
+### Basic tracker (no training required)
+
+**Run Basic Tracker** launches `face.py` — a simpler Haar-cascade tracker that follows any detected face without LBPH verification. Useful for quick camera and servo tests.
+
+---
+
+## Keyboard Controls
+
+### Training (`train_lbph.py`)
+
+| Key | Action |
+|-----|--------|
+| **Space** | Capture current face into `dataset/` |
+| **Q** | Stop capture, train model, save `face_model.xml` |
+
+### LBPH Tracker (`face_tracker_lbph.py`)
+
+| Key | Action |
+|-----|--------|
+| **Q** | Quit |
+| **C** | Center servo to 90° |
+| **R** | Move servo to minimum angle (45°) |
+| **I** | Invert left/right mapping |
+| **P** | Pause servo output |
+| **A** / **D** | Manual nudge left / right (with momentum) |
+
+### Basic Tracker (`face.py`)
+
+| Key | Action |
+|-----|--------|
+| **Q** | Quit |
+| **C** | Center servo |
+| **R** | Move to 0° |
+| **I** | Invert mapping |
+| **P** | Pause output |
+| **S** | Toggle servo enable |
+
+---
+
+## Configuration Reference
+
+Settings are defined at the top of each tracker script. Common values:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `COM_PORT` | `COM10` | Serial port (overridden by GUI) |
+| `BAUD` | `9600` | Must match Arduino sketch |
+| `SERVO_MIN` / `SERVO_MAX` | `45` / `135` | Tracker angle range |
+| `CENTER` | `90` | Neutral / home position |
+| `DEADZONE_PCT` | `0.04` | ±4% of frame width — no movement inside |
+| `SMOOTH_A` | varies | Smoothing factor (lower = smoother) |
+
+Environment variables (set automatically by the GUI):
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `FACE_TRACKER_USE_ARDUINO` | `1` / `0` | Enable or disable serial output |
+| `FACE_TRACKER_COM_PORT` | e.g. `COM10` | Target serial port |
+
+---
+
+## Architecture
+
 ```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Webcam    │────▶│  Grayscale Frame │────▶│  Haar Cascade   │
+└─────────────┘     └──────────────────┘     └────────┬────────┘
+                                                       │
+                                                       ▼
+                                              ┌─────────────────┐
+                                              │  LBPH Predict   │
+                                              │  (face_model)   │
+                                              └────────┬────────┘
+                                                       │
+                                                       ▼
+                                              ┌─────────────────┐
+                                              │ Smooth + Map    │
+                                              │ 45° – 135°      │
+                                              └────────┬────────┘
+                                                       │
+                                                       ▼
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│ Servo D9    │◀────│  Arduino 9600    │◀────│  PySerial       │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+```
+
+**Dashboard role:** `face_tracker_gui.py` spawns trainer/tracker subprocesses, streams their output to the activity log, and injects Arduino settings via environment variables.
+
+---
+
+## Privacy & Local Data
+
+The following files are **generated on your computer** and should **not** be published or committed to public repositories:
+
+| Path | Contents |
+|------|----------|
+| `dataset/` | Your face training images |
+| `custom face/face_model.xml` | Trained LBPH biometric model |
+| `vids/` | Demo recordings (if created) |
+
+All biometric processing runs offline. No data is sent to external services.
+
+---
+
+## Troubleshooting
+
+| Problem | Likely cause | Fix |
+|---------|--------------|-----|
+| `Model file not found` | Training not completed | Run the trainer and press **Q** to save the model |
+| `Camera not found` | Webcam in use or disconnected | Close other camera apps; check USB connection |
+| `Could not connect to Arduino` | Wrong COM port or sketch not uploaded | Verify port in Device Manager; re-upload `facearduino.ino` |
+| Servo jitters or overshoots | Aggressive smoothing / power issue | Lower `MAX_VELOCITY`; use external 5 V supply |
+| Face not recognized | Too few training samples | Recapture 20+ images with varied lighting and angles |
+| `LBPHFaceRecognizer_create` error | Wrong OpenCV package | Install `opencv-contrib-python`, not `opencv-python` |
+| COM port busy | Serial Monitor open in Arduino IDE | Close Serial Monitor before starting the tracker |
+
+### Finding your COM port (Windows)
+
+1. Open **Device Manager**
+2. Expand **Ports (COM & LPT)**
+3. Look for **Arduino Uno** or **USB-SERIAL CH340** — note the COM number
+
+---
+
+## License
+
+This project is open source under the [MIT License](LICENSE).
+
+---
+
+## Links
+
+- [Project website & setup guide](https://vash-codex.github.io/Servo-Facial-Tracking/)
+- [GitHub repository](https://github.com/vash-codex/Servo-Facial-Tracking)
