@@ -20,7 +20,7 @@ class TrainingConfig:
     model_file: Path
     face_size: tuple = (200, 200)
     detect_scale: float = 0.5
-    min_images: int = 5  # Minimum images required for training
+    min_images: int = 20  # Minimum images required for training
     min_face_size: tuple = (50, 50)  # Minimum face size to capture
     
     def validate(self):
