@@ -104,6 +104,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 18px;
       padding: 14px clamp(18px, 4vw, 56px);
       background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -134,15 +135,20 @@
     }
 
     .nav {
+      flex: 1 1 560px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
       flex-wrap: wrap;
       gap: 8px;
+      min-width: 0;
     }
 
     .nav a,
     .theme-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid var(--border);
       background: var(--surface-strong);
       color: var(--text);
@@ -153,6 +159,14 @@
       font-size: 0.9rem;
       font-weight: 700;
       cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .nav a.connect-link {
+      background: var(--green);
+      color: #061411;
+      border-color: var(--green);
     }
 
     .theme-button[aria-pressed="true"] {
@@ -206,7 +220,7 @@
       position: absolute;
       top: clamp(92px, 15vw, 150px);
       right: clamp(20px, 7vw, 96px);
-      width: min(520px, 44vw);
+      width: min(470px, 38vw);
       aspect-ratio: 1.12;
       display: grid;
       place-items: center;
@@ -215,6 +229,7 @@
       border-radius: 8px;
       box-shadow: 0 26px 80px var(--shadow);
       z-index: 1;
+      pointer-events: none;
     }
 
     .tracker-frame {
@@ -392,8 +407,9 @@
 
     .hero-content {
       position: relative;
-      z-index: 1;
+      z-index: 2;
       width: min(1160px, 100%);
+      margin: 0 auto;
       padding: clamp(42px, 8vw, 92px) clamp(18px, 5vw, 64px) 58px;
     }
 
@@ -423,9 +439,9 @@
     }
 
     h1 {
-      max-width: 820px;
+      max-width: 660px;
       margin-bottom: 18px;
-      font-size: clamp(3.2rem, 9vw, 8rem);
+      font-size: clamp(3.2rem, 7vw, 5.9rem);
       line-height: 0.9;
       letter-spacing: 0;
     }
@@ -439,6 +455,7 @@
     .hero-actions,
     .quick-links {
       display: flex;
+      align-items: center;
       flex-wrap: wrap;
       gap: 12px;
       margin-top: 28px;
@@ -784,6 +801,7 @@
     .file-list a,
     .private-item {
       display: flex;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
       padding: 12px 14px;
@@ -792,6 +810,7 @@
       border-radius: 8px;
       font-family: Consolas, "Courier New", monospace;
       font-size: 0.92rem;
+      min-width: 0;
     }
 
     .file-list span,
@@ -799,6 +818,8 @@
       color: var(--muted);
       font-family: "Segoe UI", sans-serif;
       font-size: 0.85rem;
+      flex: 0 0 auto;
+      text-align: right;
     }
 
     .private-item {
@@ -918,16 +939,32 @@
     }
 
     footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
       padding: 30px clamp(18px, 5vw, 64px);
       background: var(--surface);
       border-top: 1px solid var(--border);
       color: var(--muted);
     }
 
+    footer a {
+      color: var(--green);
+      font-weight: 800;
+    }
+
     @media (max-width: 920px) {
       .topbar {
         align-items: flex-start;
         flex-direction: column;
+      }
+
+      .nav {
+        flex: 0 1 auto;
+        width: 100%;
+        justify-content: flex-start;
       }
 
       .grid.four,
@@ -949,18 +986,28 @@
     }
 
     @media (max-width: 560px) {
+      .topbar {
+        gap: 10px;
+        padding: 12px 18px 10px;
+      }
+
       .hero {
         min-height: 760px;
       }
 
       .nav {
-        width: 100%;
-        justify-content: flex-start;
+        flex-wrap: nowrap;
+        gap: 8px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
       }
 
       .nav a,
       .theme-button {
-        flex: 1 1 128px;
+        flex: 0 0 auto;
       }
 
       .hero-actions,
@@ -973,11 +1020,23 @@
         width: 100%;
       }
 
+      .file-list a,
+      .private-item {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .file-list span,
+      .private-item span {
+        text-align: left;
+      }
+
       .tracker-visual {
         top: 82px;
         right: -70px;
         width: 430px;
-        opacity: 0.42;
+        opacity: 0.22;
       }
     }
   </style>
@@ -994,6 +1053,7 @@
       <a href="#workflow">Workflow</a>
       <a href="#architecture">Architecture</a>
       <a href="#files">Files</a>
+      <a class="connect-link" href="https://vash-codex.github.io/Portfolio-WebPage/" target="_blank" rel="noopener noreferrer">Connect</a>
       <button class="theme-button" data-theme-button="midnight" aria-pressed="true">Midnight</button>
       <button class="theme-button" data-theme-button="daylight" aria-pressed="false">Daylight</button>
       <button class="theme-button" data-theme-button="mint" aria-pressed="false">Mint</button>
@@ -1030,6 +1090,9 @@
         </a>
         <a class="button secondary" href="#setup">Setup Guide</a>
         <a class="button ghost" href="https://github.com/Vash-Codex/Servo-Facial-Tracking">View GitHub Repo</a>
+        <a class="button ghost" href="https://vash-codex.github.io/Portfolio-WebPage/" target="_blank" rel="noopener noreferrer">
+          Connect With Me
+        </a>
       </div>
     </div>
   </section>
@@ -1049,6 +1112,9 @@
               Download Project ZIP
             </a>
             <a class="button secondary" href="#setup">Read Setup Steps</a>
+            <a class="button ghost" href="https://vash-codex.github.io/Portfolio-WebPage/" target="_blank" rel="noopener noreferrer">
+              Connect With Me
+            </a>
           </div>
         </div>
         <div class="download-details" aria-label="Download details">
@@ -1330,7 +1396,8 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
   </main>
 
   <footer>
-    Face Tracker project overview. Built for the local Python, OpenCV, LBPH, and Arduino workspace.
+    <span>Face Tracker project overview. Built for the local Python, OpenCV, LBPH, and Arduino workspace.</span>
+    <a href="https://vash-codex.github.io/Portfolio-WebPage/" target="_blank" rel="noopener noreferrer">Connect with me</a>
   </footer>
 
   <script>
