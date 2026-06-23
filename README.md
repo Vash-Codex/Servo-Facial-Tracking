@@ -424,6 +424,9 @@ All biometric processing runs offline. No data is sent to external services.
 
 ---
 
+AI USAGE DECLARATION 
+I have used Agentic AI to fix bugs and help me plan out the project as well as for some suggestions (in the gui)
+
 ## License
 
 This project is open source under the [MIT License](LICENSE).
