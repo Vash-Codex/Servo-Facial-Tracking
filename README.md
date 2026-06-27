@@ -422,6 +422,8 @@ All biometric processing runs offline. No data is sent to external services.
 2. Expand **Ports (COM & LPT)**
 3. Look for **Arduino Uno** or **USB-SERIAL CH340** — note the COM number
 
+4. **AI Usage Declaration**
+I have used Agentic AI in this project
 ---
 
 ## License
