@@ -5,8 +5,10 @@ import numpy as np
 
 try:
     import serial
+    from serial.tools import list_ports
 except ImportError:
     serial = None
+    list_ports = None
 
 
 def env_flag(name, default=False):
@@ -15,9 +17,51 @@ def env_flag(name, default=False):
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+
+def available_serial_ports():
+    if list_ports is None:
+        return []
+    try:
+        return list(list_ports.comports())
+    except Exception:
+        return []
+
+
+def detect_arduino_port(default="COM7"):
+    ports = available_serial_ports()
+    if not ports:
+        return default
+
+    preferred_terms = (
+        "arduino",
+        "ch340",
+        "wch",
+        "usb serial",
+        "usb-serial",
+        "cp210",
+        "silicon labs",
+        "ftdi",
+        "usb modem",
+    )
+
+    for port in ports:
+        details = f"{port.device} {port.description} {port.hwid}".lower()
+        if "bluetooth" in details:
+            continue
+        if any(term in details for term in preferred_terms):
+            return port.device
+
+    for port in ports:
+        details = f"{port.device} {port.description} {port.hwid}".lower()
+        if "bluetooth" not in details:
+            return port.device
+
+    return ports[0].device or default
+
 # ---------- Settings ----------
 USE_ARDUINO = env_flag("FACE_TRACKER_USE_ARDUINO", True)
-COM_PORT   = os.getenv("FACE_TRACKER_COM_PORT", "COM7").strip() or "COM7"
+ENV_COM_PORT = os.getenv("FACE_TRACKER_COM_PORT")
+COM_PORT   = (ENV_COM_PORT.strip() if ENV_COM_PORT else detect_arduino_port("COM7")) or "COM7"
 BAUD       = 9600
 SERVO_MIN  = 45
 SERVO_MAX  = 135
@@ -41,6 +85,14 @@ if USE_ARDUINO:
             print(f"[OK] Connected to Arduino on {COM_PORT}.")
         except Exception as exc:
             print(f"[WARN] Arduino not found on {COM_PORT}: {exc}")
+            if "access is denied" in str(exc).lower():
+                print("[WARN] Close Arduino IDE Serial Monitor/Plotter or any other app using the port, then restart the tracker.")
+            ports = available_serial_ports()
+            if ports:
+                visible = ", ".join(f"{port.device} ({port.description})" for port in ports)
+                print(f"[WARN] Visible serial ports: {visible}")
+            else:
+                print("[WARN] No serial ports detected by PySerial.")
             print("[WARN] Running in camera-only mode.")
 else:
     print("[INFO] Arduino access disabled. Running in camera-only mode.")
