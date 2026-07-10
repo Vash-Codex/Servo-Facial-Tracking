@@ -10,6 +10,7 @@ build/
 dataset/
 custom face/face_model.xml
 vids/
+.wakatime-project
 
 # IDE / OS
 .vscode/

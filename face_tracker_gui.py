@@ -9,8 +9,18 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
 
+try:
+    from serial.tools import list_ports
+except ImportError:
+    list_ports = None
 
-APP_DIR = Path(__file__).resolve().parent
+
+# When frozen by PyInstaller the real "app root" is next to the .exe,
+# not inside the _MEIPASS extraction temp dir.
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).resolve().parent
+else:
+    APP_DIR = Path(__file__).resolve().parent
 CUSTOM_DIR = APP_DIR / "custom face"
 DATASET_DIR = APP_DIR / "dataset"
 TRAIN_SCRIPT = CUSTOM_DIR / "train_lbph.py"
@@ -19,6 +29,54 @@ BASIC_TRACKER_SCRIPT = APP_DIR / "face.py"
 MODEL_FILE = CUSTOM_DIR / "face_model.xml"
 ARDUINO_SKETCH = APP_DIR / "facearduino" / "facearduino.ino"
 DEMO_VIDEO = APP_DIR / "vids" / "Facial Tracking .mp4"
+
+
+def available_serial_ports():
+    if list_ports is None:
+        return []
+    try:
+        return list(list_ports.comports())
+    except Exception:
+        return []
+
+
+def detect_arduino_port(default="COM10"):
+    ports = available_serial_ports()
+    if not ports:
+        return default
+
+    preferred_terms = (
+        "arduino",
+        "ch340",
+        "wch",
+        "usb serial",
+        "usb-serial",
+        "cp210",
+        "silicon labs",
+        "ftdi",
+        "usb modem",
+    )
+
+    for port in ports:
+        details = f"{port.device} {port.description} {port.hwid}".lower()
+        if "bluetooth" in details:
+            continue
+        if any(term in details for term in preferred_terms):
+            return port.device
+
+    for port in ports:
+        details = f"{port.device} {port.description} {port.hwid}".lower()
+        if "bluetooth" not in details:
+            return port.device
+
+    return ports[0].device or default
+
+
+def format_serial_ports():
+    ports = available_serial_ports()
+    if not ports:
+        return "none detected"
+    return ", ".join(f"{port.device} ({port.description})" for port in ports)
 
 
 THEMES = {
@@ -72,7 +130,7 @@ class FaceTrackerGUI(tk.Tk):
         self.process_labels = {}
         self.log_box = None
         self.arduino_enabled = tk.BooleanVar(value=False)
-        self.com_port = tk.StringVar(value="COM10")
+        self.com_port = tk.StringVar(value=detect_arduino_port("COM10"))
 
         self.configure(bg=self.colors["bg"])
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -368,7 +426,7 @@ class FaceTrackerGUI(tk.Tk):
         self.append_log("Arduino", f"Access {state}. Restart any running tracker to apply this.")
 
     def current_com_port(self):
-        return self.com_port.get().strip().upper() or "COM10"
+        return self.com_port.get().strip().upper() or detect_arduino_port("COM10")
 
     def normalized_com_port(self):
         port = self.current_com_port()
@@ -479,6 +537,7 @@ class FaceTrackerGUI(tk.Tk):
                 self.append_log("Setup", f"OpenCV import failed: {exc}")
 
         self.append_log("Setup", f"PySerial: {'available' if serial_spec else 'missing'}")
+        self.append_log("Setup", f"Serial ports: {format_serial_ports()}")
         state = "enabled" if self.arduino_enabled.get() else "disabled"
         self.append_log("Setup", f"Arduino setting: {state} on {self.normalized_com_port()}")
         self.refresh_status()
