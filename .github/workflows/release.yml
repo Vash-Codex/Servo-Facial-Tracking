@@ -49,11 +49,27 @@ jobs:
           pip install pyinstaller>=6.0
           pip install -r requirements.txt
 
-      # ── 5. Build with PyInstaller ────────────────────────────────────────
+      # ── 5. Create placeholder folders not tracked by git ────────────────
+      - name: Create runtime placeholder folders
+        shell: pwsh
+        run: |
+          # dataset/ is gitignored (user-captured images). Create an empty
+          # folder so the built app starts without errors on first launch.
+          New-Item -ItemType Directory -Force -Path "dataset" | Out-Null
+
+      # ── 6. Build with PyInstaller ────────────────────────────────────────
       - name: Build executable
         run: pyinstaller face_tracker_gui.spec
 
-      # ── 6. Zip the output folder ─────────────────────────────────────────
+      # ── 7. Add runtime folders to dist ──────────────────────────────────
+      - name: Add runtime placeholder folders to dist
+        shell: pwsh
+        run: |
+          # dataset/ is not bundled by PyInstaller (gitignored).
+          # Copy the empty placeholder into dist so users get the right layout.
+          Copy-Item -Recurse -Force -Path "dataset" -Destination "dist\FaceTrackerGUI\dataset"
+
+      # ── 8. Zip the output folder ─────────────────────────────────────────
       - name: Zip release artifact
         shell: pwsh
         run: |
@@ -62,7 +78,7 @@ jobs:
           Compress-Archive -Path dist\FaceTrackerGUI\* -DestinationPath $zipName
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
-      # ── 7. Create GitHub Release and upload asset ────────────────────────
+      # ── 9. Create GitHub Release and upload asset ────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

@@ -30,17 +30,18 @@ added_datas = [
     # OpenCV Haar cascade XML files
     (str(CV2_DATA_DIR), "cv2/data"),
 
-    # Custom face scripts + LBPH model
+    # Custom face scripts (train_lbph.py, face_tracker_lbph.py)
+    # Note: face_model.xml is gitignored/user-generated and NOT bundled.
+    #       The app falls back gracefully when the model is missing.
     (str(HERE / "custom face"), "custom face"),
-
-    # Dataset folder (app reads it for image counts; may be empty)
-    (str(HERE / "dataset"), "dataset"),
 
     # Arduino sketch (used by the "open file" shortcut button)
     (str(HERE / "facearduino"), "facearduino"),
 
     # face.py basic tracker (launched as a subprocess from the GUI)
     (str(HERE / "face.py"), "."),
+    # Note: dataset/ is gitignored (user-captured images) and is NOT bundled.
+    #       The workflow creates an empty placeholder folder before building.
 ]
 
 # ---------------------------------------------------------------------------
