@@ -19,13 +19,18 @@ except ImportError:
 # not inside the _MEIPASS extraction temp dir.
 if getattr(sys, "frozen", False):
     APP_DIR = Path(sys.executable).resolve().parent
+    # Sub-scripts are bundled as separate executables alongside FaceTrackerGUI.exe
+    TRAIN_SCRIPT        = APP_DIR / "TrainFace.exe"
+    LBPH_TRACKER_SCRIPT = APP_DIR / "FaceTrackerLBPH.exe"
+    BASIC_TRACKER_SCRIPT = APP_DIR / "FaceTrackerBasic.exe"
 else:
     APP_DIR = Path(__file__).resolve().parent
-CUSTOM_DIR = APP_DIR / "custom face"
+    TRAIN_SCRIPT        = APP_DIR / "custom face" / "train_lbph.py"
+    LBPH_TRACKER_SCRIPT = APP_DIR / "custom face" / "face_tracker_lbph.py"
+    BASIC_TRACKER_SCRIPT = APP_DIR / "face.py"
+
+CUSTOM_DIR  = APP_DIR / "custom face"
 DATASET_DIR = APP_DIR / "dataset"
-TRAIN_SCRIPT = CUSTOM_DIR / "train_lbph.py"
-LBPH_TRACKER_SCRIPT = CUSTOM_DIR / "face_tracker_lbph.py"
-BASIC_TRACKER_SCRIPT = APP_DIR / "face.py"
 MODEL_FILE = CUSTOM_DIR / "face_model.xml"
 ARDUINO_SKETCH = APP_DIR / "facearduino" / "facearduino.ino"
 DEMO_VIDEO = APP_DIR / "vids" / "Facial Tracking .mp4"
@@ -458,8 +463,14 @@ class FaceTrackerGUI(tk.Tk):
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform.startswith("win") else 0
 
         try:
+            # When frozen, sub-scripts are bundled as standalone .exe files.
+            # Running sys.executable would relaunch the GUI itself, not the script.
+            if getattr(sys, "frozen", False):
+                cmd = [str(script_path)]
+            else:
+                cmd = [sys.executable, "-u", str(script_path)]
             process = subprocess.Popen(
-                [sys.executable, "-u", str(script_path)],
+                cmd,
                 cwd=str(APP_DIR),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
