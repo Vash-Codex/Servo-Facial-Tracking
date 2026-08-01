@@ -1,5 +1,6 @@
 import cv2
 import os
+import sys
 import logging
 import numpy as np
 from pathlib import Path
@@ -305,13 +306,27 @@ class LBPHTrainer:
             return False
 
 
+def get_app_dir() -> Path:
+    """Return the application root directory.
+
+    When frozen as a PyInstaller onefile EXE, ``__file__`` points into the
+    temporary ``_MEIPASS`` extraction directory, NOT next to the EXE.  We
+    must use ``sys.executable`` instead so that user data (dataset, model)
+    is always resolved relative to the actual EXE location.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    # Dev mode: this file lives in "custom face/", parent is project root.
+    return Path(__file__).resolve().parent.parent
+
+
 def main():
     """Main entry point."""
     try:
-        # Setup paths
-        base_dir = Path(__file__).resolve().parent
-        dataset_dir = base_dir.parent / "dataset"
-        model_file = base_dir / "face_model.xml"
+        # Setup paths relative to the application root (works frozen + dev)
+        app_dir = get_app_dir()
+        dataset_dir = app_dir / "dataset"
+        model_file  = app_dir / "custom face" / "face_model.xml"
         
         # Create config
         config = TrainingConfig(

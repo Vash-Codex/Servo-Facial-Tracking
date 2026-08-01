@@ -1,5 +1,6 @@
 import cv2
 import os
+import sys
 import time
 import numpy as np
 import logging
@@ -19,6 +20,40 @@ logging.basicConfig(
     format='[%(levelname)s] %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _get_app_dir() -> Path:
+    """Return the application root directory.
+
+    When frozen as a PyInstaller onefile EXE, ``__file__`` resolves into the
+    temp ``_MEIPASS`` directory — NOT next to the EXE.  Use
+    ``sys.executable`` so user data (model) is always found next to the EXE.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    # Dev mode: this file lives in "custom face/", parent is project root.
+    return Path(__file__).resolve().parent.parent
+
+
+def _get_model_path(model_filename: str) -> Path:
+    """Resolve the LBPH model file path.
+
+    Priority:
+    1. User-trained model next to the EXE  (``<app_dir>/custom face/<file>``)
+    2. Bundled model inside ``_MEIPASS``    (first-run before user trains)
+    3. Falls back to the user path (will raise FileNotFoundError if missing)
+    """
+    user_model = _get_app_dir() / "custom face" / model_filename
+    if user_model.exists():
+        return user_model
+    if getattr(sys, "frozen", False):
+        try:
+            bundled = Path(sys._MEIPASS) / "custom face" / model_filename
+            if bundled.exists():
+                return bundled
+        except AttributeError:
+            pass
+    return user_model  # Caller will raise FileNotFoundError if missing
 
 
 def env_flag(name, default=False):
@@ -278,9 +313,8 @@ class FaceTracker:
     def _load_model(self) -> bool:
         """Load LBPH face recognizer model."""
         try:
-            base_dir = Path(__file__).resolve().parent
-            model_path = base_dir / self.config.model_file
-            
+            model_path = _get_model_path(self.config.model_file)
+
             if not model_path.exists():
                 raise FileNotFoundError(f"Model file not found: {model_path}")
             

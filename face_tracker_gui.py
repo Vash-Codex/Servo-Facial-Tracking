@@ -1,12 +1,66 @@
 import importlib.util
+import io
 import os
 import queue
 import subprocess
 import sys
 import threading
 import time
-import tkinter as tk
 from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Sub-mode dispatcher — must run before ANY heavy import (tkinter, cv2, …)
+#
+# When frozen as a single onefile EXE the GUI re-launches *itself* with
+# "--mode <name>" to run a tracker or trainer in a subprocess.  We detect
+# that flag here and hand off to the appropriate module, then exit.
+# ---------------------------------------------------------------------------
+def _dispatch_submode() -> bool:
+    """If --mode flag is present, run the requested sub-module and exit."""
+    if "--mode" not in sys.argv:
+        return False
+
+    idx  = sys.argv.index("--mode")
+    mode = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else ""
+
+    # When the EXE is windowed (console=False) Python sets sys.stdout/stderr
+    # to None.  Restore them from the OS file descriptors so that piped
+    # output (captured by the GUI log panel) works correctly.
+    for fd, attr in ((1, "stdout"), (2, "stderr")):
+        if getattr(sys, attr) is None:
+            try:
+                setattr(sys, attr, io.TextIOWrapper(
+                    io.open(fd, "wb", closefd=False),
+                    encoding="utf-8", errors="replace", line_buffering=True,
+                ))
+            except Exception:
+                try:
+                    setattr(sys, attr, open(os.devnull, "w"))
+                except Exception:
+                    pass
+
+    if mode == "train":
+        import train_lbph
+        train_lbph.main()
+    elif mode == "lbph":
+        import face_tracker_lbph
+        face_tracker_lbph.main()
+    elif mode == "basic":
+        import face as face_mod
+        face_mod.main()
+    else:
+        print(f"[ERROR] Unknown mode: {mode!r}", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(0)
+
+
+if _dispatch_submode():
+    pass  # Never reached; sys.exit() was called inside
+
+
+import tkinter as tk
 from tkinter import messagebox
 
 try:
@@ -15,25 +69,30 @@ except ImportError:
     list_ports = None
 
 
-# When frozen by PyInstaller the real "app root" is next to the .exe,
-# not inside the _MEIPASS extraction temp dir.
-if getattr(sys, "frozen", False):
-    APP_DIR = Path(sys.executable).resolve().parent
-    # Sub-scripts are bundled as separate executables alongside FaceTrackerGUI.exe
-    TRAIN_SCRIPT        = APP_DIR / "TrainFace.exe"
-    LBPH_TRACKER_SCRIPT = APP_DIR / "FaceTrackerLBPH.exe"
-    BASIC_TRACKER_SCRIPT = APP_DIR / "FaceTrackerBasic.exe"
-else:
-    APP_DIR = Path(__file__).resolve().parent
-    TRAIN_SCRIPT        = APP_DIR / "custom face" / "train_lbph.py"
-    LBPH_TRACKER_SCRIPT = APP_DIR / "custom face" / "face_tracker_lbph.py"
-    BASIC_TRACKER_SCRIPT = APP_DIR / "face.py"
+# ---------------------------------------------------------------------------
+# Paths — when frozen the app root is the folder containing the EXE.
+# ---------------------------------------------------------------------------
+APP_DIR = (
+    Path(sys.executable).resolve().parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent
+)
 
-CUSTOM_DIR  = APP_DIR / "custom face"
-DATASET_DIR = APP_DIR / "dataset"
-MODEL_FILE = CUSTOM_DIR / "face_model.xml"
+# Task configurations: task display-name → (dev script path, frozen mode flag)
+TASK_CONFIGS: dict = {
+    "Training":      (APP_DIR / "custom face" / "train_lbph.py",        "train"),
+    "LBPH Tracker": (APP_DIR / "custom face" / "face_tracker_lbph.py", "lbph"),
+    "Basic Tracker":(APP_DIR / "face.py",                              "basic"),
+}
+
+CUSTOM_DIR     = APP_DIR / "custom face"
+DATASET_DIR    = APP_DIR / "dataset"
+MODEL_FILE     = CUSTOM_DIR / "face_model.xml"
 ARDUINO_SKETCH = APP_DIR / "facearduino" / "facearduino.ino"
-DEMO_VIDEO = APP_DIR / "vids" / "Facial Tracking .mp4"
+DEMO_VIDEO     = APP_DIR / "video.mp4"
+
+
+
 
 
 def available_serial_ports():
@@ -229,7 +288,7 @@ class FaceTrackerGUI(tk.Tk):
             "Capture new face samples and rebuild the LBPH model.",
             "green",
             "Start Training",
-            lambda: self.launch_script("Training", TRAIN_SCRIPT),
+            lambda: self.launch_script("Training"),
             0,
         )
         self.action_card(
@@ -238,7 +297,7 @@ class FaceTrackerGUI(tk.Tk):
             "Use your trained model for recognition and servo tracking.",
             "pink",
             "Start Tracker",
-            lambda: self.launch_script("LBPH Tracker", LBPH_TRACKER_SCRIPT),
+            lambda: self.launch_script("LBPH Tracker"),
             1,
         )
         self.action_card(
@@ -247,7 +306,7 @@ class FaceTrackerGUI(tk.Tk):
             "Launch the older face-only tracker for quick camera testing.",
             "green",
             "Start Basic",
-            lambda: self.launch_script("Basic Tracker", BASIC_TRACKER_SCRIPT),
+            lambda: self.launch_script("Basic Tracker"),
             2,
         )
 
@@ -445,15 +504,18 @@ class FaceTrackerGUI(tk.Tk):
         self.append_log("Arduino", f"COM port set to {port}.{note}")
         self.refresh_status()
 
-    def launch_script(self, name, script_path):
-        if not script_path.exists():
-            self.append_log("GUI", f"Missing script: {script_path}")
-            messagebox.showerror("Missing file", f"Could not find:\n{script_path}")
-            return
+    def launch_script(self, task_name: str):
+        """Launch a tracker or trainer task by name.
 
-        existing = self.processes.get(name)
+        When frozen (single onefile EXE): re-launches *this same EXE* with
+        ``--mode <flag>`` so the correct sub-module runs in a subprocess.
+        In dev mode: runs the source .py script with the current Python.
+        """
+        script_path, mode_flag = TASK_CONFIGS[task_name]
+
+        existing = self.processes.get(task_name)
         if existing and existing.poll() is None:
-            self.append_log("GUI", f"{name} is already running.")
+            self.append_log("GUI", f"{task_name} is already running.")
             return
 
         env = os.environ.copy()
@@ -463,33 +525,39 @@ class FaceTrackerGUI(tk.Tk):
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform.startswith("win") else 0
 
         try:
-            # When frozen, sub-scripts are bundled as standalone .exe files.
-            # Running sys.executable would relaunch the GUI itself, not the script.
             if getattr(sys, "frozen", False):
-                cmd = [str(script_path)]
+                # Single onefile EXE: re-launch self in the requested sub-mode.
+                cmd = [sys.executable, "--mode", mode_flag]
             else:
+                # Dev mode: run the .py script with the active Python interpreter.
+                if not script_path.exists():
+                    self.append_log("GUI", f"Missing script: {script_path}")
+                    messagebox.showerror("Missing file", f"Could not find:\n{script_path}")
+                    return
                 cmd = [sys.executable, "-u", str(script_path)]
+
             process = subprocess.Popen(
                 cmd,
                 cwd=str(APP_DIR),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
                 text=True,
                 bufsize=1,
                 env=env,
                 creationflags=creationflags,
             )
         except Exception as exc:
-            self.append_log("GUI", f"Could not start {name}: {exc}")
+            self.append_log("GUI", f"Could not start {task_name}: {exc}")
             messagebox.showerror("Launch failed", str(exc))
             return
 
-        self.processes[name] = process
-        self.append_log("GUI", f"Started {name}. Use the OpenCV window controls inside that task.")
-        if script_path in (LBPH_TRACKER_SCRIPT, BASIC_TRACKER_SCRIPT):
+        self.processes[task_name] = process
+        self.append_log("GUI", f"Started {task_name}. Use the OpenCV window controls inside that task.")
+        if task_name in ("LBPH Tracker", "Basic Tracker"):
             state = "on" if self.arduino_enabled.get() else "off"
             self.append_log("Arduino", f"Access {state}; port {self.normalized_com_port()}.")
-        threading.Thread(target=self.read_process_output, args=(name, process), daemon=True).start()
+        threading.Thread(target=self.read_process_output, args=(task_name, process), daemon=True).start()
         self.refresh_status()
 
     def read_process_output(self, name, process):
