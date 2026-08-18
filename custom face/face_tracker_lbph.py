@@ -69,7 +69,7 @@ class TrackerConfig:
     """Configuration for face tracking."""
     # Arduino settings
     use_arduino: bool = False
-    com_port: str = "COM10"
+    com_port: str = "COM3"
     baud_rate: int = 9600
     
     # Servo settings
@@ -128,7 +128,7 @@ class TrackerConfig:
         """Load configuration from environment variables."""
         return cls(
             use_arduino=env_flag("FACE_TRACKER_USE_ARDUINO", False),
-            com_port=os.getenv("FACE_TRACKER_COM_PORT", "COM10").strip() or "COM10",
+            com_port=os.getenv("FACE_TRACKER_COM_PORT", "COM3").strip() or "COM3",
             confidence_threshold=int(os.getenv("FACE_TRACKER_CONFIDENCE", "70")),
         )
 

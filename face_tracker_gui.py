@@ -92,6 +92,10 @@ ARDUINO_SKETCH = APP_DIR / "facearduino" / "facearduino.ino"
 DEMO_VIDEO     = APP_DIR / "video.mp4"
 
 
+WINDOW_ASPECT_WIDTH = 16
+WINDOW_ASPECT_HEIGHT = 9
+WINDOW_SCALE = 80
+MIN_WINDOW_SCALE = 69
 
 
 
@@ -104,7 +108,7 @@ def available_serial_ports():
         return []
 
 
-def detect_arduino_port(default="COM10"):
+def detect_arduino_port(default="COM3"):
     ports = available_serial_ports()
     if not ports:
         return default
@@ -183,8 +187,14 @@ class FaceTrackerGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Face Tracker Control Center")
-        self.geometry("1120x720")
-        self.minsize(940, 620)
+        self.geometry(f"{WINDOW_ASPECT_WIDTH * WINDOW_SCALE}x{WINDOW_ASPECT_HEIGHT * WINDOW_SCALE}")
+        self.minsize(WINDOW_ASPECT_WIDTH * MIN_WINDOW_SCALE, WINDOW_ASPECT_HEIGHT * MIN_WINDOW_SCALE)
+        self.aspect(
+            WINDOW_ASPECT_WIDTH,
+            WINDOW_ASPECT_HEIGHT,
+            WINDOW_ASPECT_WIDTH,
+            WINDOW_ASPECT_HEIGHT,
+        )
 
         self.theme_name = "dark"
         self.processes = {}
@@ -194,7 +204,7 @@ class FaceTrackerGUI(tk.Tk):
         self.process_labels = {}
         self.log_box = None
         self.arduino_enabled = tk.BooleanVar(value=False)
-        self.com_port = tk.StringVar(value=detect_arduino_port("COM10"))
+        self.com_port = tk.StringVar(value=detect_arduino_port("COM3"))
 
         self.configure(bg=self.colors["bg"])
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -212,15 +222,15 @@ class FaceTrackerGUI(tk.Tk):
 
         c = self.colors
         self.configure(bg=c["bg"])
-        self.grid_columnconfigure(0, minsize=280)
+        self.grid_columnconfigure(0, minsize=260)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        sidebar = tk.Frame(self, bg=c["panel"], padx=24, pady=24)
+        sidebar = tk.Frame(self, bg=c["panel"], padx=18, pady=16)
         sidebar.grid(row=0, column=0, sticky="nsew")
-        sidebar.grid_rowconfigure(8, weight=1)
+        sidebar.grid_rowconfigure(7, weight=1)
 
-        main = tk.Frame(self, bg=c["bg"], padx=28, pady=24)
+        main = tk.Frame(self, bg=c["bg"], padx=22, pady=12)
         main.grid(row=0, column=1, sticky="nsew")
         main.grid_columnconfigure(0, weight=1)
         main.grid_rowconfigure(4, weight=1)
@@ -232,8 +242,7 @@ class FaceTrackerGUI(tk.Tk):
 
     def build_sidebar(self, parent):
         c = self.colors
-        self.label(parent, "Face", 30, "bold", c["green"]).grid(row=0, column=0, sticky="w")
-        self.label(parent, "Tracker", 30, "bold", c["pink"]).grid(row=1, column=0, sticky="w")
+        self.label(parent, "Face Tracker", 24, "bold", c["green"]).grid(row=0, column=0, sticky="w")
         self.label(
             parent,
             "Control training, recognition, Arduino files, and project assets from one place.",
@@ -242,21 +251,21 @@ class FaceTrackerGUI(tk.Tk):
             c["muted"],
             wraplength=220,
             justify="left",
-        ).grid(row=2, column=0, sticky="ew", pady=(10, 26))
+        ).grid(row=1, column=0, sticky="ew", pady=(6, 16))
 
         mode_text = "Switch to Light" if self.theme_name == "dark" else "Switch to Dark"
-        self.button(parent, mode_text, self.toggle_theme, "secondary").grid(row=3, column=0, sticky="ew")
+        self.button(parent, mode_text, self.toggle_theme, "secondary").grid(row=2, column=0, sticky="ew")
 
-        self.stat_card(parent, "Dataset Images", "dataset", 4)
-        self.stat_card(parent, "LBPH Model", "model", 5)
-        self.stat_card(parent, "Arduino", "arduino", 6)
-        self.stat_card(parent, "Running Task", "running", 7)
+        self.stat_card(parent, "Dataset Images", "dataset", 3)
+        self.stat_card(parent, "LBPH Model", "model", 4)
+        self.stat_card(parent, "Arduino", "arduino", 5)
+        self.stat_card(parent, "Running Task", "running", 6)
 
         footer = tk.Frame(parent, bg=c["panel"])
-        footer.grid(row=9, column=0, sticky="ew", pady=(18, 0))
+        footer.grid(row=8, column=0, sticky="ew", pady=(10, 0))
         footer.grid_columnconfigure(0, weight=1)
         self.button(footer, "Open Project Folder", lambda: self.open_path(APP_DIR), "secondary").grid(
-            row=0, column=0, sticky="ew", pady=(0, 10)
+            row=0, column=0, sticky="ew", pady=(0, 8)
         )
         self.button(footer, "Check Setup", self.check_setup, "outline").grid(row=1, column=0, sticky="ew")
 
@@ -266,7 +275,7 @@ class FaceTrackerGUI(tk.Tk):
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
 
-        self.label(header, "Control Center", 24, "bold", c["text"]).grid(row=0, column=0, sticky="w")
+        self.label(header, "Control Center", 20, "bold", c["text"]).grid(row=0, column=0, sticky="w")
         self.label(
             header,
             "Start the trainer, run tracking, or open the project pieces you use most.",
@@ -278,7 +287,7 @@ class FaceTrackerGUI(tk.Tk):
         self.process_labels["status_pill"].grid(row=0, column=1, rowspan=2, sticky="e")
 
         action_grid = tk.Frame(parent, bg=c["bg"])
-        action_grid.grid(row=1, column=0, sticky="ew", pady=(24, 18))
+        action_grid.grid(row=1, column=0, sticky="ew", pady=(12, 10))
         for index in range(3):
             action_grid.grid_columnconfigure(index, weight=1, uniform="cards")
 
@@ -303,7 +312,7 @@ class FaceTrackerGUI(tk.Tk):
         self.action_card(
             action_grid,
             "Run Basic Tracker",
-            "Launch the older face-only tracker for quick camera testing.",
+            "Launch the Facial Tracker to detect anyones' face.",
             "green",
             "Start Basic",
             lambda: self.launch_script("Basic Tracker"),
@@ -312,34 +321,34 @@ class FaceTrackerGUI(tk.Tk):
 
         self.build_hardware_panel(parent, 2)
 
-        tools = tk.Frame(parent, bg=c["panel"], padx=18, pady=16, highlightbackground=c["border"], highlightthickness=1)
-        tools.grid(row=3, column=0, sticky="ew", pady=(0, 18))
+        tools = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
+        tools.grid(row=3, column=0, sticky="ew", pady=(0, 12))
         for index in range(5):
             tools.grid_columnconfigure(index, weight=1, uniform="tools")
         self.label(tools, "Project Shortcuts", 12, "bold", c["text"]).grid(row=0, column=0, columnspan=5, sticky="w")
         self.button(tools, "Dataset", lambda: self.open_path(DATASET_DIR), "secondary").grid(
-            row=1, column=0, sticky="ew", padx=(0, 8), pady=(14, 0)
+            row=1, column=0, sticky="ew", padx=(0, 8), pady=(8, 0)
         )
         self.button(tools, "Custom Face", lambda: self.open_path(CUSTOM_DIR), "secondary").grid(
-            row=1, column=1, sticky="ew", padx=8, pady=(14, 0)
+            row=1, column=1, sticky="ew", padx=8, pady=(8, 0)
         )
         self.button(tools, "Arduino", lambda: self.open_path(ARDUINO_SKETCH), "secondary").grid(
-            row=1, column=2, sticky="ew", padx=8, pady=(14, 0)
+            row=1, column=2, sticky="ew", padx=8, pady=(8, 0)
         )
         self.button(tools, "Demo Video", lambda: self.open_path(DEMO_VIDEO), "secondary").grid(
-            row=1, column=3, sticky="ew", padx=8, pady=(14, 0)
+            row=1, column=3, sticky="ew", padx=8, pady=(8, 0)
         )
         self.button(tools, "Stop All", self.stop_all_processes, "danger").grid(
-            row=1, column=4, sticky="ew", padx=(8, 0), pady=(14, 0)
+            row=1, column=4, sticky="ew", padx=(8, 0), pady=(8, 0)
         )
 
-        log_panel = tk.Frame(parent, bg=c["panel"], padx=18, pady=16, highlightbackground=c["border"], highlightthickness=1)
+        log_panel = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
         log_panel.grid(row=4, column=0, sticky="nsew")
         log_panel.grid_columnconfigure(0, weight=1)
         log_panel.grid_rowconfigure(1, weight=1)
 
         log_header = tk.Frame(log_panel, bg=c["panel"])
-        log_header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        log_header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         log_header.grid_columnconfigure(0, weight=1)
         self.label(log_header, "Activity Log", 12, "bold", c["text"]).grid(row=0, column=0, sticky="w")
         self.button(log_header, "Clear", self.clear_log, "outline").grid(row=0, column=1, sticky="e")
@@ -352,20 +361,20 @@ class FaceTrackerGUI(tk.Tk):
             relief="flat",
             bd=0,
             padx=12,
-            pady=10,
+            pady=5,
             wrap="word",
             font=("Consolas", 10),
-            height=10,
+            height=4,
         )
         self.log_box.grid(row=1, column=0, sticky="nsew")
         self.log_box.configure(state="disabled")
 
     def build_hardware_panel(self, parent, row):
         c = self.colors
-        panel = tk.Frame(parent, bg=c["panel"], padx=18, pady=16, highlightbackground=c["border"], highlightthickness=1)
-        panel.grid(row=row, column=0, sticky="ew", pady=(0, 18))
+        panel = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
+        panel.grid(row=row, column=0, sticky="ew", pady=(0, 12))
         panel.grid_columnconfigure(0, weight=1)
-        panel.grid_columnconfigure(1, minsize=170)
+        panel.grid_columnconfigure(1, minsize=120)
         panel.grid_columnconfigure(2, minsize=210)
 
         self.label(panel, "Arduino Access", 12, "bold", c["text"]).grid(row=0, column=0, sticky="w")
@@ -375,11 +384,9 @@ class FaceTrackerGUI(tk.Tk):
             10,
             "normal",
             c["muted"],
-        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
-        toggle_text = "Arduino ON" if self.arduino_enabled.get() else "Arduino OFF"
-        toggle_kind = "green" if self.arduino_enabled.get() else "outline"
-        self.button(panel, toggle_text, self.toggle_arduino_access, toggle_kind).grid(
+        self.toggle_switch(panel, self.arduino_enabled, self.toggle_arduino_access).grid(
             row=0, column=1, rowspan=2, sticky="ew", padx=(18, 12)
         )
 
@@ -401,30 +408,30 @@ class FaceTrackerGUI(tk.Tk):
             font=("Segoe UI", 11, "bold"),
             width=12,
         )
-        entry.grid(row=0, column=0, sticky="ew", ipady=9)
+        entry.grid(row=0, column=0, sticky="ew", ipady=6)
         entry.bind("<Return>", lambda _event: self.apply_com_port())
         self.button(entry_row, "Use", self.apply_com_port, "pink").grid(row=0, column=1, sticky="e", padx=(8, 0))
 
     def action_card(self, parent, title, body, accent_key, button_text, command, column):
         c = self.colors
-        card = tk.Frame(parent, bg=c["panel"], padx=18, pady=16, highlightbackground=c["border"], highlightthickness=1)
+        card = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
         card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 0 if column == 2 else 8))
         card.grid_columnconfigure(0, weight=1)
-        tk.Frame(card, bg=c[accent_key], height=4).grid(row=0, column=0, sticky="ew", pady=(0, 14))
-        self.label(card, title, 14, "bold", c["text"]).grid(row=1, column=0, sticky="w")
-        self.label(card, body, 10, "normal", c["muted"], wraplength=220, justify="left").grid(
-            row=2, column=0, sticky="ew", pady=(8, 18)
+        tk.Frame(card, bg=c[accent_key], height=4).grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        self.label(card, title, 12, "bold", c["text"]).grid(row=1, column=0, sticky="w")
+        self.label(card, body, 9, "normal", c["muted"], wraplength=220, justify="left").grid(
+            row=2, column=0, sticky="ew", pady=(6, 10)
         )
         self.button(card, button_text, command, accent_key).grid(row=3, column=0, sticky="ew")
 
     def stat_card(self, parent, title, key, row):
         c = self.colors
-        card = tk.Frame(parent, bg=c["panel_alt"], padx=14, pady=12, highlightbackground=c["border"], highlightthickness=1)
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+        card = tk.Frame(parent, bg=c["panel_alt"], padx=12, pady=8, highlightbackground=c["border"], highlightthickness=1)
+        card.grid(row=row, column=0, sticky="ew", pady=(0, 8))
         card.grid_columnconfigure(0, weight=1)
         self.label(card, title, 9, "normal", c["muted"]).grid(row=0, column=0, sticky="w")
-        value = self.label(card, "...", 16, "bold", c["text"])
-        value.grid(row=1, column=0, sticky="w", pady=(5, 0))
+        value = self.label(card, "...", 15, "bold", c["text"])
+        value.grid(row=1, column=0, sticky="w", pady=(3, 0))
         self.stat_labels[key] = value
 
     def label(self, parent, text, size, weight, fg, **kwargs):
@@ -459,12 +466,62 @@ class FaceTrackerGUI(tk.Tk):
             bd=0,
             cursor="hand2",
             font=("Segoe UI", 10, "bold"),
-            padx=14,
-            pady=10,
+            padx=12,
+            pady=8,
         )
         widget.bind("<Enter>", lambda _event: widget.configure(bg=hover))
         widget.bind("<Leave>", lambda _event: widget.configure(bg=bg))
         return widget
+
+    def toggle_switch(self, parent, variable, command):
+        c = self.colors
+        is_on = variable.get()
+        wrapper = tk.Frame(parent, bg=parent.cget("bg"), cursor="hand2")
+        wrapper.grid_columnconfigure(0, weight=1)
+
+        canvas = tk.Canvas(
+            wrapper,
+            width=68,
+            height=34,
+            bg=parent.cget("bg"),
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+        )
+        canvas.grid(row=0, column=0, sticky="e")
+
+        track = c["green"] if is_on else c["panel_alt"]
+        knob = "#ffffff" if is_on else c["muted"]
+        outline = c["green"] if is_on else c["border"]
+        text = "ON" if is_on else "OFF"
+        text_x = 24 if is_on else 44
+        knob_x = 51 if is_on else 17
+
+        canvas.create_oval(2, 2, 34, 32, fill=track, outline=outline)
+        canvas.create_oval(34, 2, 66, 32, fill=track, outline=outline)
+        canvas.create_rectangle(18, 2, 50, 32, fill=track, outline=track)
+        canvas.create_text(
+            text_x,
+            17,
+            text=text,
+            fill=c["field"] if is_on else c["muted"],
+            font=("Segoe UI", 7, "bold"),
+        )
+        canvas.create_oval(knob_x - 12, 5, knob_x + 12, 29, fill=knob, outline=knob)
+
+        state_label = self.label(
+            wrapper,
+            "On" if is_on else "Off",
+            10,
+            "bold",
+            c["green"] if is_on else c["muted"],
+        )
+        state_label.grid(row=1, column=0, sticky="e", pady=(3, 0))
+
+        wrapper.bind("<Button-1>", lambda _event: command())
+        canvas.bind("<Button-1>", lambda _event: command())
+        state_label.bind("<Button-1>", lambda _event: command())
+        return wrapper
 
     def pill(self, parent, text):
         c = self.colors
@@ -475,7 +532,7 @@ class FaceTrackerGUI(tk.Tk):
             fg=c["green"],
             font=("Segoe UI", 10, "bold"),
             padx=16,
-            pady=8,
+            pady=6,
         )
 
     def toggle_theme(self):
@@ -490,7 +547,7 @@ class FaceTrackerGUI(tk.Tk):
         self.append_log("Arduino", f"Access {state}. Restart any running tracker to apply this.")
 
     def current_com_port(self):
-        return self.com_port.get().strip().upper() or detect_arduino_port("COM10")
+        return self.com_port.get().strip().upper() or detect_arduino_port("COM3")
 
     def normalized_com_port(self):
         port = self.current_com_port()
