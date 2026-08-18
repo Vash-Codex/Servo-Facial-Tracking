@@ -33,8 +33,10 @@ CV2_HAAR_DIR = Path(cv2.data.haarcascades)
 #   custom face   – face_model.xml bundled so LBPH tracker works first-run
 #                   before the user trains their own model
 # ---------------------------------------------------------------------------
+CASCADE_LOCAL  = (str(HERE / "haarcascade_frontalface_default.xml"), ".")
 CASCADE_DATA_1 = (str(CV2_HAAR_DIR), "cv2/data")
 CASCADE_DATA_2 = (str(CV2_HAAR_DIR), "cv2/data/data")
+CASCADE_DATA_3 = (str(CV2_HAAR_DIR), ".")
 ARDUINO_DATA    = (str(HERE / "facearduino"),   "facearduino")
 CUSTOM_DIR_DATA = (str(HERE / "custom face"),   "custom face")
 
@@ -42,7 +44,7 @@ CUSTOM_DIR_DATA = (str(HERE / "custom face"),   "custom face")
 _dataset_src = HERE / "dataset"
 DATASET_DATA = (str(_dataset_src), "dataset") if _dataset_src.exists() else None
 
-datas = [CASCADE_DATA_1, CASCADE_DATA_2, ARDUINO_DATA, CUSTOM_DIR_DATA]
+datas = [CASCADE_LOCAL, CASCADE_DATA_1, CASCADE_DATA_2, CASCADE_DATA_3, ARDUINO_DATA, CUSTOM_DIR_DATA]
 if DATASET_DATA:
     datas.append(DATASET_DATA)
 

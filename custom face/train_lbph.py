@@ -15,15 +15,22 @@ logger = logging.getLogger(__name__)
 
 
 def get_cascade_path(filename: str = "haarcascade_frontalface_default.xml") -> str:
-    """Resolve absolute path to Haar cascade XML file, supporting PyInstaller bundles."""
+    """Resolve absolute path to Haar cascade XML file, supporting PyInstaller bundles and local fallback."""
     candidates = []
     if hasattr(sys, "_MEIPASS"):
         meipass = Path(sys._MEIPASS)
         candidates.extend([
+            meipass / filename,
             meipass / "cv2" / "data" / filename,
             meipass / "cv2" / "data" / "data" / filename,
-            meipass / filename,
+            meipass / "data" / filename,
         ])
+    here = Path(__file__).resolve().parent
+    candidates.extend([
+        here / filename,
+        here.parent / filename,
+        Path.cwd() / filename,
+    ])
     if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
         haar_dir = Path(cv2.data.haarcascades)
         candidates.extend([
