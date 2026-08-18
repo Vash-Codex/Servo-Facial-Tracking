@@ -24,7 +24,7 @@ import cv2
 HERE = Path(SPECPATH)
 
 # OpenCV ships its Haar cascade XMLs inside the package data directory.
-CV2_DATA_DIR = Path(cv2.data.haarcascades).parent
+CV2_HAAR_DIR = Path(cv2.data.haarcascades)
 
 # ---------------------------------------------------------------------------
 # Bundled data
@@ -33,7 +33,8 @@ CV2_DATA_DIR = Path(cv2.data.haarcascades).parent
 #   custom face   – face_model.xml bundled so LBPH tracker works first-run
 #                   before the user trains their own model
 # ---------------------------------------------------------------------------
-CASCADE_DATA    = (str(CV2_DATA_DIR),           "cv2/data")
+CASCADE_DATA_1 = (str(CV2_HAAR_DIR), "cv2/data")
+CASCADE_DATA_2 = (str(CV2_HAAR_DIR), "cv2/data/data")
 ARDUINO_DATA    = (str(HERE / "facearduino"),   "facearduino")
 CUSTOM_DIR_DATA = (str(HERE / "custom face"),   "custom face")
 
@@ -41,7 +42,7 @@ CUSTOM_DIR_DATA = (str(HERE / "custom face"),   "custom face")
 _dataset_src = HERE / "dataset"
 DATASET_DATA = (str(_dataset_src), "dataset") if _dataset_src.exists() else None
 
-datas = [CASCADE_DATA, ARDUINO_DATA, CUSTOM_DIR_DATA]
+datas = [CASCADE_DATA_1, CASCADE_DATA_2, ARDUINO_DATA, CUSTOM_DIR_DATA]
 if DATASET_DATA:
     datas.append(DATASET_DATA)
 

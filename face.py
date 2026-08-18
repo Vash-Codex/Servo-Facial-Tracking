@@ -1,8 +1,34 @@
 import cv2
 import os
 import random
+import sys
 import time
+from pathlib import Path
 import numpy as np
+
+
+def get_cascade_path(filename: str = "haarcascade_frontalface_default.xml") -> str:
+    """Resolve absolute path to Haar cascade XML file, supporting PyInstaller bundles."""
+    candidates = []
+    if hasattr(sys, "_MEIPASS"):
+        meipass = Path(sys._MEIPASS)
+        candidates.extend([
+            meipass / "cv2" / "data" / filename,
+            meipass / "cv2" / "data" / "data" / filename,
+            meipass / filename,
+        ])
+    if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
+        haar_dir = Path(cv2.data.haarcascades)
+        candidates.extend([
+            haar_dir / filename,
+            haar_dir.parent / filename,
+            haar_dir.parent / "data" / filename,
+        ])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return os.path.join(getattr(cv2.data, "haarcascades", ""), filename)
+
 
 try:
     import serial
@@ -543,7 +569,10 @@ def main():
     if not cap.isOpened():
         raise RuntimeError("Camera not found")
 
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cascade_path = get_cascade_path("haarcascade_frontalface_default.xml")
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+    if face_cascade.empty():
+        raise RuntimeError(f"Failed to load Haar Cascade classifier from {cascade_path}")
 
     invert         = False
     paused         = False

@@ -14,6 +14,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def get_cascade_path(filename: str = "haarcascade_frontalface_default.xml") -> str:
+    """Resolve absolute path to Haar cascade XML file, supporting PyInstaller bundles."""
+    candidates = []
+    if hasattr(sys, "_MEIPASS"):
+        meipass = Path(sys._MEIPASS)
+        candidates.extend([
+            meipass / "cv2" / "data" / filename,
+            meipass / "cv2" / "data" / "data" / filename,
+            meipass / filename,
+        ])
+    if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
+        haar_dir = Path(cv2.data.haarcascades)
+        candidates.extend([
+            haar_dir / filename,
+            haar_dir.parent / filename,
+            haar_dir.parent / "data" / filename,
+        ])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return os.path.join(getattr(cv2.data, "haarcascades", ""), filename)
+
+
+
 @dataclass
 class TrainingConfig:
     """Configuration for model training."""
@@ -79,7 +103,7 @@ class FaceCapture:
             logger.info("Camera initialized successfully")
             
             # Load face detector
-            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            cascade_path = get_cascade_path("haarcascade_frontalface_default.xml")
             self.detector = cv2.CascadeClassifier(cascade_path)
             if self.detector.empty():
                 raise RuntimeError("Failed to load Haar Cascade")
