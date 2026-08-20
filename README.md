@@ -1,7 +1,7 @@
 # Servo Facial Tracking
 
 > [!CAUTION]
-> **AI Usage Notice**: Parts of this project, including code generation, debugging, and documentation, were developed with the assistance of AI tools. Please review code and test hardware setups carefully before deployment.
+> **AI Usage Notice**: Parts of this project, including GUI design, and debugging were developed with the assistance of AI tools. Please review code and test hardware setups carefully before deployment.
 
 A face recognition and camera-tracking system built with Python, OpenCV, and Arduino. It trains a custom LBPH (Local Binary Patterns Histograms) model on your face using a webcam, tracks your movement, and sends pan angles over serial to an Arduino-controlled servo motor.
 
