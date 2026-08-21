@@ -943,40 +943,6 @@
       border-style: dashed;
     }
 
-    .privacy-card {
-      min-height: 166px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .privacy-card::after {
-      content: "";
-      position: absolute;
-      right: -18px;
-      bottom: -18px;
-      width: 86px;
-      height: 86px;
-      border: 14px solid var(--green-soft);
-      border-radius: 50%;
-    }
-
-    .privacy-card:nth-child(even)::after {
-      border-color: var(--pink-soft);
-    }
-
-    .privacy-card strong {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--green);
-      font-size: 0.86rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .privacy-card:nth-child(even) strong {
-      color: var(--pink);
-    }
-
     .abstract-preview {
       display: grid;
       grid-template-columns: 1.1fr 0.9fr;
@@ -1242,18 +1208,6 @@
 
       .button {
         width: 100%;
-      }
-
-      .file-list a,
-      .private-item {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .file-list span,
-      .private-item span {
-        text-align: left;
       }
     }
   </style>
@@ -1537,33 +1491,6 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
             These values are applied when a tracker is started from the GUI, so the scripts can run
             with or without Arduino access.
           </p>
-        </div>
-      </div>
-    </section>
-
-    <section aria-labelledby="privacy-title">
-      <div class="section-title">
-        <h2 id="privacy-title">Privacy-Safe Publishing</h2>
-        <p>This page shows the system without embedding your face dataset, demo video, or biometric model.</p>
-      </div>
-      <div class="grid two">
-        <div class="card abstract-preview" aria-hidden="true">
-          <div class="preview-screen"></div>
-          <div class="preview-stack">
-            <div class="preview-line"><span></span></div>
-            <div class="preview-line"><span></span></div>
-            <div class="preview-line"><span></span></div>
-          </div>
-        </div>
-        <div class="grid">
-          <article class="card privacy-card">
-            <strong>No Face Media</strong>
-            <p>The public overview uses generated interface graphics instead of webcam video or dataset images.</p>
-          </article>
-          <article class="card privacy-card">
-            <strong>Keep Local</strong>
-            <p>Dataset images, demo recordings, and trained recognition models should stay out of hosted folders.</p>
-          </article>
         </div>
       </div>
     </section>
