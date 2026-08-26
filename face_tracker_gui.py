@@ -1,767 +1,796 @@
-import importlib.util
-import io
-import os
-import queue
-import subprocess
-import sys
-import threading
-import time
-from pathlib import Path
+import importlib .util 
+import io 
+import os 
+import queue 
+import subprocess 
+import sys 
+import threading 
+import time 
+from pathlib import Path 
 
+def _dispatch_submode ()->bool :
+    if "--mode"not in sys .argv :
+        return False 
 
-# ---------------------------------------------------------------------------
-# Sub-mode dispatcher — must run before ANY heavy import (tkinter, cv2, …)
-#
-# When frozen as a single onefile EXE the GUI re-launches *itself* with
-# "--mode <name>" to run a tracker or trainer in a subprocess.  We detect
-# that flag here and hand off to the appropriate module, then exit.
-# ---------------------------------------------------------------------------
-def _dispatch_submode() -> bool:
-    """If --mode flag is present, run the requested sub-module and exit."""
-    if "--mode" not in sys.argv:
-        return False
+    idx =sys .argv .index ("--mode")
+    mode =sys .argv [idx +1 ]if idx +1 <len (sys .argv )else ""
 
-    idx  = sys.argv.index("--mode")
-    mode = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else ""
-
-    # When the EXE is windowed (console=False) Python sets sys.stdout/stderr
-    # to None.  Restore them from the OS file descriptors so that piped
-    # output (captured by the GUI log panel) works correctly.
-    for fd, attr in ((1, "stdout"), (2, "stderr")):
-        if getattr(sys, attr) is None:
-            try:
-                setattr(sys, attr, io.TextIOWrapper(
-                    io.open(fd, "wb", closefd=False),
-                    encoding="utf-8", errors="replace", line_buffering=True,
+    for fd ,attr in ((1 ,"stdout"),(2 ,"stderr")):
+        if getattr (sys ,attr )is None :
+            try :
+                setattr (sys ,attr ,io .TextIOWrapper (
+                io .open (fd ,"wb",closefd =False ),
+                encoding ="utf-8",errors ="replace",line_buffering =True ,
                 ))
-            except Exception:
-                try:
-                    setattr(sys, attr, open(os.devnull, "w"))
-                except Exception:
-                    pass
+            except Exception :
+                try :
+                    setattr (sys ,attr ,open (os .devnull ,"w"))
+                except Exception :
+                    pass 
 
-    if mode == "train":
-        import train_lbph
-        train_lbph.main()
-    elif mode == "lbph":
-        import face_tracker_lbph
-        face_tracker_lbph.main()
-    elif mode == "basic":
-        import face as face_mod
-        face_mod.main()
-    else:
-        print(f"[ERROR] Unknown mode: {mode!r}", file=sys.stderr)
-        sys.exit(1)
+    if mode =="train":
+        import train_lbph 
+        train_lbph .main ()
+    elif mode =="lbph":
+        import face_tracker_lbph 
+        face_tracker_lbph .main ()
+    elif mode =="basic":
+        import face as face_mod 
+        face_mod .main ()
+    else :
+        print (f"[ERROR] Unknown mode: {mode!r}",file =sys .stderr )
+        sys .exit (1 )
 
-    sys.exit(0)
-
-
-if _dispatch_submode():
-    pass  # Never reached; sys.exit() was called inside
+    sys .exit (0 )
 
 
-import tkinter as tk
-from tkinter import messagebox
-
-try:
-    from serial.tools import list_ports
-except ImportError:
-    list_ports = None
+if _dispatch_submode ():
+    pass 
 
 
-# ---------------------------------------------------------------------------
-# Paths — when frozen the app root is the folder containing the EXE.
-# ---------------------------------------------------------------------------
-APP_DIR = (
-    Path(sys.executable).resolve().parent
-    if getattr(sys, "frozen", False)
-    else Path(__file__).resolve().parent
+import tkinter as tk 
+from tkinter import messagebox 
+
+try :
+    from serial .tools import list_ports 
+except ImportError :
+    list_ports =None 
+
+
+APP_DIR =(
+Path (sys .executable ).resolve ().parent 
+if getattr (sys ,"frozen",False )
+else Path (__file__ ).resolve ().parent 
 )
 
-# Task configurations: task display-name → (dev script path, frozen mode flag)
-TASK_CONFIGS: dict = {
-    "Training":      (APP_DIR / "custom face" / "train_lbph.py",        "train"),
-    "LBPH Tracker": (APP_DIR / "custom face" / "face_tracker_lbph.py", "lbph"),
-    "Basic Tracker":(APP_DIR / "face.py",                              "basic"),
+TASK_CONFIGS :dict ={
+"Training":(APP_DIR /"custom face"/"train_lbph.py","train"),
+"LBPH Tracker":(APP_DIR /"custom face"/"face_tracker_lbph.py","lbph"),
+"Basic Tracker":(APP_DIR /"face.py","basic"),
 }
 
-CUSTOM_DIR     = APP_DIR / "custom face"
-DATASET_DIR    = APP_DIR / "dataset"
-MODEL_FILE     = CUSTOM_DIR / "face_model.xml"
-ARDUINO_SKETCH = APP_DIR / "facearduino" / "facearduino.ino"
-DEMO_VIDEO     = APP_DIR / "video.mp4"
+def get_arduino_sketch_path ():
+    target =APP_DIR /"facearduino"/"facearduino.ino"
+    if target .exists ():
+        return target 
+    if hasattr (sys ,"_MEIPASS"):
+        bundled =Path (sys ._MEIPASS )/"facearduino"/"facearduino.ino"
+        if bundled .exists ():
+            try :
+                dest_dir =APP_DIR /"facearduino"
+                dest_dir .mkdir (parents =True ,exist_ok =True )
+                dest_file =dest_dir /"facearduino.ino"
+                if not dest_file .exists ():
+                    import shutil 
+                    shutil .copy2 (bundled ,dest_file )
+                return dest_file 
+            except Exception :
+                return bundled 
+    return target 
 
 
-WINDOW_ASPECT_WIDTH = 16
-WINDOW_ASPECT_HEIGHT = 9
-WINDOW_SCALE = 80
-MIN_WINDOW_SCALE = 69
+CUSTOM_DIR =APP_DIR /"custom face"
+DATASET_DIR =APP_DIR /"dataset"
+MODEL_FILE =CUSTOM_DIR /"face_model.xml"
+ARDUINO_SKETCH =get_arduino_sketch_path ()
+
+
+WINDOW_ASPECT_WIDTH =16 
+WINDOW_ASPECT_HEIGHT =9 
+WINDOW_SCALE =80 
+MIN_WINDOW_SCALE =69 
 
 
 
-def available_serial_ports():
-    if list_ports is None:
+def available_serial_ports ():
+    if list_ports is None :
         return []
-    try:
-        return list(list_ports.comports())
-    except Exception:
+    try :
+        return list (list_ports .comports ())
+    except Exception :
         return []
 
 
-def detect_arduino_port(default="COM3"):
-    ports = available_serial_ports()
-    if not ports:
-        return default
+def detect_arduino_port (default ="COM3"):
+    ports =available_serial_ports ()
+    if not ports :
+        return default 
 
-    preferred_terms = (
-        "arduino",
-        "ch340",
-        "wch",
-        "usb serial",
-        "usb-serial",
-        "cp210",
-        "silicon labs",
-        "ftdi",
-        "usb modem",
+    preferred_terms =(
+    "arduino",
+    "ch340",
+    "ch341",
+    "wch",
+    "usb serial",
+    "usb-serial",
+    "cp210",
+    "cp2102",
+    "cp2104",
+    "silicon labs",
+    "ftdi",
+    "ft232",
+    "usb modem",
+    "cdc",
+    "pro micro",
+    "leonardo",
+    "nano",
+    "uno",
+    "mega",
     )
 
-    for port in ports:
-        details = f"{port.device} {port.description} {port.hwid}".lower()
-        if "bluetooth" in details:
-            continue
-        if any(term in details for term in preferred_terms):
-            return port.device
+    for port in ports :
+        details =f"{port.device} {port.description} {port.hwid}".lower ()
+        if "bluetooth"in details :
+            continue 
+        if any (term in details for term in preferred_terms ):
+            return port .device 
 
-    for port in ports:
-        details = f"{port.device} {port.description} {port.hwid}".lower()
-        if "bluetooth" not in details:
-            return port.device
+    for port in ports :
+        details =f"{port.device} {port.description} {port.hwid}".lower ()
+        if "bluetooth"not in details :
+            return port .device 
 
-    return ports[0].device or default
+    return ports [0 ].device if ports else default 
 
 
-def format_serial_ports():
-    ports = available_serial_ports()
-    if not ports:
+def format_serial_ports ():
+    ports =available_serial_ports ()
+    if not ports :
         return "none detected"
-    return ", ".join(f"{port.device} ({port.description})" for port in ports)
+    return ", ".join (f"{port.device} ({port.description})"for port in ports )
 
 
-THEMES = {
-    "dark": {
-        "bg": "#0f1314",
-        "panel": "#151a1c",
-        "panel_alt": "#1d2427",
-        "field": "#111719",
-        "border": "#2e3a3f",
-        "text": "#f2f7f5",
-        "muted": "#a2afaa",
-        "green": "#00d48a",
-        "green_hover": "#18e49d",
-        "pink": "#ff4da6",
-        "pink_hover": "#ff6ab5",
-        "danger": "#ff5f6d",
-        "danger_hover": "#ff7581",
-        "shadow": "#0a0d0e",
-    },
-    "light": {
-        "bg": "#f5f8f7",
-        "panel": "#ffffff",
-        "panel_alt": "#edf4f1",
-        "field": "#f8fbfa",
-        "border": "#d7e3df",
-        "text": "#13201b",
-        "muted": "#65736e",
-        "green": "#009b68",
-        "green_hover": "#00ad76",
-        "pink": "#d93687",
-        "pink_hover": "#ec4a99",
-        "danger": "#d94a5f",
-        "danger_hover": "#e85c70",
-        "shadow": "#dfe8e4",
-    },
+THEMES ={
+"dark":{
+"bg":"#0f1314",
+"panel":"#151a1c",
+"panel_alt":"#1d2427",
+"field":"#111719",
+"border":"#2e3a3f",
+"text":"#f2f7f5",
+"muted":"#a2afaa",
+"green":"#00d48a",
+"green_hover":"#18e49d",
+"pink":"#ff4da6",
+"pink_hover":"#ff6ab5",
+"danger":"#ff5f6d",
+"danger_hover":"#ff7581",
+"shadow":"#0a0d0e",
+},
+"light":{
+"bg":"#f5f8f7",
+"panel":"#ffffff",
+"panel_alt":"#edf4f1",
+"field":"#f8fbfa",
+"border":"#d7e3df",
+"text":"#13201b",
+"muted":"#65736e",
+"green":"#009b68",
+"green_hover":"#00ad76",
+"pink":"#d93687",
+"pink_hover":"#ec4a99",
+"danger":"#d94a5f",
+"danger_hover":"#e85c70",
+"shadow":"#dfe8e4",
+},
 }
 
 
-class FaceTrackerGUI(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Face Tracker Control Center")
-        self.geometry(f"{WINDOW_ASPECT_WIDTH * WINDOW_SCALE}x{WINDOW_ASPECT_HEIGHT * WINDOW_SCALE}")
-        self.minsize(WINDOW_ASPECT_WIDTH * MIN_WINDOW_SCALE, WINDOW_ASPECT_HEIGHT * MIN_WINDOW_SCALE)
-        self.aspect(
-            WINDOW_ASPECT_WIDTH,
-            WINDOW_ASPECT_HEIGHT,
-            WINDOW_ASPECT_WIDTH,
-            WINDOW_ASPECT_HEIGHT,
+class FaceTrackerGUI (tk .Tk ):
+    def __init__ (self ):
+        super ().__init__ ()
+        self .title ("Face Tracker Control Center")
+        self .geometry (f"{WINDOW_ASPECT_WIDTH * WINDOW_SCALE}x{WINDOW_ASPECT_HEIGHT * WINDOW_SCALE}")
+        self .minsize (WINDOW_ASPECT_WIDTH *MIN_WINDOW_SCALE ,WINDOW_ASPECT_HEIGHT *MIN_WINDOW_SCALE )
+        self .aspect (
+        WINDOW_ASPECT_WIDTH ,
+        WINDOW_ASPECT_HEIGHT ,
+        WINDOW_ASPECT_WIDTH ,
+        WINDOW_ASPECT_HEIGHT ,
         )
 
-        self.theme_name = "dark"
-        self.processes = {}
-        self.output_queue = queue.Queue()
-        self.log_lines = []
-        self.stat_labels = {}
-        self.process_labels = {}
-        self.log_box = None
-        self.arduino_enabled = tk.BooleanVar(value=False)
-        self.com_port = tk.StringVar(value=detect_arduino_port("COM3"))
+        self .theme_name ="dark"
+        self .processes ={}
+        self .output_queue =queue .Queue ()
+        self .log_lines =[]
+        self .stat_labels ={}
+        self .process_labels ={}
+        self .log_box =None 
+        detected =detect_arduino_port (None )
+        default_port =detected if detected else "COM3"
+        self .arduino_enabled =tk .BooleanVar (value =True if detected else False )
+        self .com_port =tk .StringVar (value =default_port )
 
-        self.configure(bg=self.colors["bg"])
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.build_ui()
-        self.after(150, self.drain_output_queue)
-        self.after(1500, self.refresh_status_loop)
+        self .configure (bg =self .colors ["bg"])
+        self .protocol ("WM_DELETE_WINDOW",self .on_close )
+        self .build_ui ()
+        self .after (150 ,self .drain_output_queue )
+        self .after (1500 ,self .refresh_status_loop )
 
-    @property
-    def colors(self):
-        return THEMES[self.theme_name]
+    @property 
+    def colors (self ):
+        return THEMES [self .theme_name ]
 
-    def build_ui(self):
-        for child in self.winfo_children():
-            child.destroy()
+    def build_ui (self ):
+        for child in self .winfo_children ():
+            child .destroy ()
 
-        c = self.colors
-        self.configure(bg=c["bg"])
-        self.grid_columnconfigure(0, minsize=260)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        c =self .colors 
+        self .configure (bg =c ["bg"])
+        self .grid_columnconfigure (0 ,minsize =260 )
+        self .grid_columnconfigure (1 ,weight =1 )
+        self .grid_rowconfigure (0 ,weight =1 )
 
-        sidebar = tk.Frame(self, bg=c["panel"], padx=18, pady=16)
-        sidebar.grid(row=0, column=0, sticky="nsew")
-        sidebar.grid_rowconfigure(7, weight=1)
+        sidebar =tk .Frame (self ,bg =c ["panel"],padx =18 ,pady =16 )
+        sidebar .grid (row =0 ,column =0 ,sticky ="nsew")
+        sidebar .grid_rowconfigure (7 ,weight =1 )
 
-        main = tk.Frame(self, bg=c["bg"], padx=22, pady=12)
-        main.grid(row=0, column=1, sticky="nsew")
-        main.grid_columnconfigure(0, weight=1)
-        main.grid_rowconfigure(4, weight=1)
+        main =tk .Frame (self ,bg =c ["bg"],padx =22 ,pady =12 )
+        main .grid (row =0 ,column =1 ,sticky ="nsew")
+        main .grid_columnconfigure (0 ,weight =1 )
+        main .grid_rowconfigure (4 ,weight =1 )
 
-        self.build_sidebar(sidebar)
-        self.build_main(main)
-        self.refresh_status()
-        self.restore_log()
+        self .build_sidebar (sidebar )
+        self .build_main (main )
+        self .refresh_status ()
+        self .restore_log ()
 
-    def build_sidebar(self, parent):
-        c = self.colors
-        self.label(parent, "Face Tracker", 24, "bold", c["green"]).grid(row=0, column=0, sticky="w")
-        self.label(
-            parent,
-            "Control training, recognition, Arduino files, and project assets from one place.",
-            10,
-            "normal",
-            c["muted"],
-            wraplength=220,
-            justify="left",
-        ).grid(row=1, column=0, sticky="ew", pady=(6, 16))
+    def build_sidebar (self ,parent ):
+        c =self .colors 
+        self .label (parent ,"Face Tracker",24 ,"bold",c ["green"]).grid (row =0 ,column =0 ,sticky ="w")
+        self .label (
+        parent ,
+        "Control training, recognition, Arduino files, and project assets from one place.",
+        10 ,
+        "normal",
+        c ["muted"],
+        wraplength =220 ,
+        justify ="left",
+        ).grid (row =1 ,column =0 ,sticky ="ew",pady =(6 ,16 ))
 
-        mode_text = "Switch to Light" if self.theme_name == "dark" else "Switch to Dark"
-        self.button(parent, mode_text, self.toggle_theme, "secondary").grid(row=2, column=0, sticky="ew")
+        mode_text ="Switch to Light"if self .theme_name =="dark"else "Switch to Dark"
+        self .button (parent ,mode_text ,self .toggle_theme ,"secondary").grid (row =2 ,column =0 ,sticky ="ew")
 
-        self.stat_card(parent, "Dataset Images", "dataset", 3)
-        self.stat_card(parent, "LBPH Model", "model", 4)
-        self.stat_card(parent, "Arduino", "arduino", 5)
-        self.stat_card(parent, "Running Task", "running", 6)
+        self .stat_card (parent ,"Dataset Images","dataset",3 )
+        self .stat_card (parent ,"LBPH Model","model",4 )
+        self .stat_card (parent ,"Arduino","arduino",5 )
+        self .stat_card (parent ,"Running Task","running",6 )
 
-        footer = tk.Frame(parent, bg=c["panel"])
-        footer.grid(row=8, column=0, sticky="ew", pady=(10, 0))
-        footer.grid_columnconfigure(0, weight=1)
-        self.button(footer, "Open Project Folder", lambda: self.open_path(APP_DIR), "secondary").grid(
-            row=0, column=0, sticky="ew", pady=(0, 8)
+        footer =tk .Frame (parent ,bg =c ["panel"])
+        footer .grid (row =8 ,column =0 ,sticky ="ew",pady =(10 ,0 ))
+        footer .grid_columnconfigure (0 ,weight =1 )
+        self .button (footer ,"Open Project Folder",lambda :self .open_path (APP_DIR ),"secondary").grid (
+        row =0 ,column =0 ,sticky ="ew",pady =(0 ,8 )
         )
-        self.button(footer, "Check Setup", self.check_setup, "outline").grid(row=1, column=0, sticky="ew")
+        self .button (footer ,"Check Setup",self .check_setup ,"outline").grid (row =1 ,column =0 ,sticky ="ew")
 
-    def build_main(self, parent):
-        c = self.colors
-        header = tk.Frame(parent, bg=c["bg"])
-        header.grid(row=0, column=0, sticky="ew")
-        header.grid_columnconfigure(0, weight=1)
+    def build_main (self ,parent ):
+        c =self .colors 
+        header =tk .Frame (parent ,bg =c ["bg"])
+        header .grid (row =0 ,column =0 ,sticky ="ew")
+        header .grid_columnconfigure (0 ,weight =1 )
 
-        self.label(header, "Control Center", 20, "bold", c["text"]).grid(row=0, column=0, sticky="w")
-        self.label(
-            header,
-            "Start the trainer, run tracking, or open the project pieces you use most.",
-            10,
-            "normal",
-            c["muted"],
-        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
-        self.process_labels["status_pill"] = self.pill(header, "Idle")
-        self.process_labels["status_pill"].grid(row=0, column=1, rowspan=2, sticky="e")
+        self .label (header ,"Control Center",20 ,"bold",c ["text"]).grid (row =0 ,column =0 ,sticky ="w")
+        self .label (
+        header ,
+        "Start the trainer, run tracking, or open the project pieces you use most.",
+        10 ,
+        "normal",
+        c ["muted"],
+        ).grid (row =1 ,column =0 ,sticky ="w",pady =(4 ,0 ))
+        self .process_labels ["status_pill"]=self .pill (header ,"Idle")
+        self .process_labels ["status_pill"].grid (row =0 ,column =1 ,rowspan =2 ,sticky ="e")
 
-        action_grid = tk.Frame(parent, bg=c["bg"])
-        action_grid.grid(row=1, column=0, sticky="ew", pady=(12, 10))
-        for index in range(3):
-            action_grid.grid_columnconfigure(index, weight=1, uniform="cards")
+        action_grid =tk .Frame (parent ,bg =c ["bg"])
+        action_grid .grid (row =1 ,column =0 ,sticky ="ew",pady =(12 ,10 ))
+        for index in range (3 ):
+            action_grid .grid_columnconfigure (index ,weight =1 ,uniform ="cards")
 
-        self.action_card(
-            action_grid,
-            "Train Face Model",
-            "Capture new face samples and rebuild the LBPH model.",
-            "green",
-            "Start Training",
-            lambda: self.launch_script("Training"),
-            0,
+        self .action_card (
+        action_grid ,
+        "Train Face Model",
+        "Capture new face samples and rebuild the LBPH model.",
+        "green",
+        "Start Training",
+        lambda :self .launch_script ("Training"),
+        0 ,
         )
-        self.action_card(
-            action_grid,
-            "Run LBPH Tracker",
-            "Use your trained model for recognition and servo tracking.",
-            "pink",
-            "Start Tracker",
-            lambda: self.launch_script("LBPH Tracker"),
-            1,
+        self .action_card (
+        action_grid ,
+        "Run LBPH Tracker",
+        "Use your trained model for recognition and servo tracking.",
+        "pink",
+        "Start Tracker",
+        lambda :self .launch_script ("LBPH Tracker"),
+        1 ,
         )
-        self.action_card(
-            action_grid,
-            "Run Basic Tracker",
-            "Launch the Facial Tracker to detect anyones' face.",
-            "green",
-            "Start Basic",
-            lambda: self.launch_script("Basic Tracker"),
-            2,
-        )
-
-        self.build_hardware_panel(parent, 2)
-
-        tools = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
-        tools.grid(row=3, column=0, sticky="ew", pady=(0, 12))
-        for index in range(5):
-            tools.grid_columnconfigure(index, weight=1, uniform="tools")
-        self.label(tools, "Project Shortcuts", 12, "bold", c["text"]).grid(row=0, column=0, columnspan=5, sticky="w")
-        self.button(tools, "Dataset", lambda: self.open_path(DATASET_DIR), "secondary").grid(
-            row=1, column=0, sticky="ew", padx=(0, 8), pady=(8, 0)
-        )
-        self.button(tools, "Custom Face", lambda: self.open_path(CUSTOM_DIR), "secondary").grid(
-            row=1, column=1, sticky="ew", padx=8, pady=(8, 0)
-        )
-        self.button(tools, "Arduino", lambda: self.open_path(ARDUINO_SKETCH), "secondary").grid(
-            row=1, column=2, sticky="ew", padx=8, pady=(8, 0)
-        )
-        self.button(tools, "Demo Video", lambda: self.open_path(DEMO_VIDEO), "secondary").grid(
-            row=1, column=3, sticky="ew", padx=8, pady=(8, 0)
-        )
-        self.button(tools, "Stop All", self.stop_all_processes, "danger").grid(
-            row=1, column=4, sticky="ew", padx=(8, 0), pady=(8, 0)
+        self .action_card (
+        action_grid ,
+        "Run Basic Tracker",
+        "Launch the Facial Tracker to detect anyones' face.",
+        "green",
+        "Start Basic",
+        lambda :self .launch_script ("Basic Tracker"),
+        2 ,
         )
 
-        log_panel = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
-        log_panel.grid(row=4, column=0, sticky="nsew")
-        log_panel.grid_columnconfigure(0, weight=1)
-        log_panel.grid_rowconfigure(1, weight=1)
+        self .build_hardware_panel (parent ,2 )
 
-        log_header = tk.Frame(log_panel, bg=c["panel"])
-        log_header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        log_header.grid_columnconfigure(0, weight=1)
-        self.label(log_header, "Activity Log", 12, "bold", c["text"]).grid(row=0, column=0, sticky="w")
-        self.button(log_header, "Clear", self.clear_log, "outline").grid(row=0, column=1, sticky="e")
-
-        self.log_box = tk.Text(
-            log_panel,
-            bg=c["field"],
-            fg=c["text"],
-            insertbackground=c["green"],
-            relief="flat",
-            bd=0,
-            padx=12,
-            pady=5,
-            wrap="word",
-            font=("Consolas", 10),
-            height=4,
+        tools =tk .Frame (parent ,bg =c ["panel"],padx =14 ,pady =10 ,highlightbackground =c ["border"],highlightthickness =1 )
+        tools .grid (row =3 ,column =0 ,sticky ="ew",pady =(0 ,12 ))
+        for index in range (4 ):
+            tools .grid_columnconfigure (index ,weight =1 ,uniform ="tools")
+        self .label (tools ,"Project Shortcuts",12 ,"bold",c ["text"]).grid (row =0 ,column =0 ,columnspan =4 ,sticky ="w")
+        self .button (tools ,"Dataset",lambda :self .open_path (DATASET_DIR ),"secondary").grid (
+        row =1 ,column =0 ,sticky ="ew",padx =(0 ,8 ),pady =(8 ,0 )
         )
-        self.log_box.grid(row=1, column=0, sticky="nsew")
-        self.log_box.configure(state="disabled")
-
-    def build_hardware_panel(self, parent, row):
-        c = self.colors
-        panel = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
-        panel.grid(row=row, column=0, sticky="ew", pady=(0, 12))
-        panel.grid_columnconfigure(0, weight=1)
-        panel.grid_columnconfigure(1, minsize=120)
-        panel.grid_columnconfigure(2, minsize=210)
-
-        self.label(panel, "Arduino Access", 12, "bold", c["text"]).grid(row=0, column=0, sticky="w")
-        self.label(
-            panel,
-            "These settings are used when you start a tracker from this dashboard.",
-            10,
-            "normal",
-            c["muted"],
-        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-        self.toggle_switch(panel, self.arduino_enabled, self.toggle_arduino_access).grid(
-            row=0, column=1, rowspan=2, sticky="ew", padx=(18, 12)
+        self .button (tools ,"Custom Face",lambda :self .open_path (CUSTOM_DIR ),"secondary").grid (
+        row =1 ,column =1 ,sticky ="ew",padx =8 ,pady =(8 ,0 )
+        )
+        self .button (tools ,"Arduino",lambda :self .open_path (get_arduino_sketch_path ()),"secondary").grid (
+        row =1 ,column =2 ,sticky ="ew",padx =8 ,pady =(8 ,0 )
+        )
+        self .button (tools ,"Stop All",self .stop_all_processes ,"danger").grid (
+        row =1 ,column =3 ,sticky ="ew",padx =(8 ,0 ),pady =(8 ,0 )
         )
 
-        port_box = tk.Frame(panel, bg=c["panel"])
-        port_box.grid(row=0, column=2, rowspan=2, sticky="ew")
-        port_box.grid_columnconfigure(0, weight=1)
-        self.label(port_box, "COM Port", 9, "bold", c["muted"]).grid(row=0, column=0, sticky="w")
-        entry_row = tk.Frame(port_box, bg=c["panel"])
-        entry_row.grid(row=1, column=0, sticky="ew", pady=(6, 0))
-        entry_row.grid_columnconfigure(0, weight=1)
-        entry = tk.Entry(
-            entry_row,
-            textvariable=self.com_port,
-            bg=c["field"],
-            fg=c["text"],
-            insertbackground=c["green"],
-            relief="flat",
-            bd=0,
-            font=("Segoe UI", 11, "bold"),
-            width=12,
+        log_panel =tk .Frame (parent ,bg =c ["panel"],padx =14 ,pady =10 ,highlightbackground =c ["border"],highlightthickness =1 )
+        log_panel .grid (row =4 ,column =0 ,sticky ="nsew")
+        log_panel .grid_columnconfigure (0 ,weight =1 )
+        log_panel .grid_rowconfigure (1 ,weight =1 )
+
+        log_header =tk .Frame (log_panel ,bg =c ["panel"])
+        log_header .grid (row =0 ,column =0 ,sticky ="ew",pady =(0 ,6 ))
+        log_header .grid_columnconfigure (0 ,weight =1 )
+        self .label (log_header ,"Activity Log",12 ,"bold",c ["text"]).grid (row =0 ,column =0 ,sticky ="w")
+        self .button (log_header ,"Clear",self .clear_log ,"outline").grid (row =0 ,column =1 ,sticky ="e")
+
+        self .log_box =tk .Text (
+        log_panel ,
+        bg =c ["field"],
+        fg =c ["text"],
+        insertbackground =c ["green"],
+        relief ="flat",
+        bd =0 ,
+        padx =12 ,
+        pady =5 ,
+        wrap ="word",
+        font =("Consolas",10 ),
+        height =4 ,
         )
-        entry.grid(row=0, column=0, sticky="ew", ipady=6)
-        entry.bind("<Return>", lambda _event: self.apply_com_port())
-        self.button(entry_row, "Use", self.apply_com_port, "pink").grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self .log_box .grid (row =1 ,column =0 ,sticky ="nsew")
+        self .log_box .configure (state ="disabled")
 
-    def action_card(self, parent, title, body, accent_key, button_text, command, column):
-        c = self.colors
-        card = tk.Frame(parent, bg=c["panel"], padx=14, pady=10, highlightbackground=c["border"], highlightthickness=1)
-        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 0 if column == 2 else 8))
-        card.grid_columnconfigure(0, weight=1)
-        tk.Frame(card, bg=c[accent_key], height=4).grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        self.label(card, title, 12, "bold", c["text"]).grid(row=1, column=0, sticky="w")
-        self.label(card, body, 9, "normal", c["muted"], wraplength=220, justify="left").grid(
-            row=2, column=0, sticky="ew", pady=(6, 10)
-        )
-        self.button(card, button_text, command, accent_key).grid(row=3, column=0, sticky="ew")
+    def build_hardware_panel (self ,parent ,row ):
+        c =self .colors 
+        panel =tk .Frame (parent ,bg =c ["panel"],padx =14 ,pady =10 ,highlightbackground =c ["border"],highlightthickness =1 )
+        panel .grid (row =row ,column =0 ,sticky ="ew",pady =(0 ,12 ))
+        panel .grid_columnconfigure (0 ,weight =1 )
+        panel .grid_columnconfigure (1 ,minsize =120 )
+        panel .grid_columnconfigure (2 ,minsize =270 )
 
-    def stat_card(self, parent, title, key, row):
-        c = self.colors
-        card = tk.Frame(parent, bg=c["panel_alt"], padx=12, pady=8, highlightbackground=c["border"], highlightthickness=1)
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 8))
-        card.grid_columnconfigure(0, weight=1)
-        self.label(card, title, 9, "normal", c["muted"]).grid(row=0, column=0, sticky="w")
-        value = self.label(card, "...", 15, "bold", c["text"])
-        value.grid(row=1, column=0, sticky="w", pady=(3, 0))
-        self.stat_labels[key] = value
+        self .label (panel ,"Arduino Access",12 ,"bold",c ["text"]).grid (row =0 ,column =0 ,sticky ="w")
+        self .label (
+        panel ,
+        "These settings are used when you start a tracker from this dashboard.",
+        10 ,
+        "normal",
+        c ["muted"],
+        ).grid (row =1 ,column =0 ,sticky ="w",pady =(2 ,0 ))
 
-    def label(self, parent, text, size, weight, fg, **kwargs):
-        return tk.Label(
-            parent,
-            text=text,
-            bg=parent.cget("bg"),
-            fg=fg,
-            font=("Segoe UI", size, weight),
-            **kwargs,
+        self .toggle_switch (panel ,self .arduino_enabled ,self .toggle_arduino_access ).grid (
+        row =0 ,column =1 ,rowspan =2 ,sticky ="ew",padx =(18 ,12 )
         )
 
-    def button(self, parent, text, command, kind):
-        c = self.colors
-        styles = {
-            "green": (c["green"], "#041411", c["green_hover"]),
-            "pink": (c["pink"], "#1c0712", c["pink_hover"]),
-            "secondary": (c["panel_alt"], c["text"], c["border"]),
-            "outline": (c["panel"], c["muted"], c["panel_alt"]),
-            "danger": (c["danger"], "#18070a", c["danger_hover"]),
+        port_box =tk .Frame (panel ,bg =c ["panel"])
+        port_box .grid (row =0 ,column =2 ,rowspan =2 ,sticky ="ew")
+        port_box .grid_columnconfigure (0 ,weight =1 )
+        self .label (port_box ,"COM Port",9 ,"bold",c ["muted"]).grid (row =0 ,column =0 ,sticky ="w")
+        entry_row =tk .Frame (port_box ,bg =c ["panel"])
+        entry_row .grid (row =1 ,column =0 ,sticky ="ew",pady =(6 ,0 ))
+        entry_row .grid_columnconfigure (0 ,weight =1 )
+        entry =tk .Entry (
+        entry_row ,
+        textvariable =self .com_port ,
+        bg =c ["field"],
+        fg =c ["text"],
+        insertbackground =c ["green"],
+        relief ="flat",
+        bd =0 ,
+        font =("Segoe UI",11 ,"bold"),
+        width =8 ,
+        )
+        entry .grid (row =0 ,column =0 ,sticky ="ew",ipady =6 )
+        entry .bind ("<Return>",lambda _event :self .apply_com_port ())
+        self .button (entry_row ,"Use",self .apply_com_port ,"pink").grid (row =0 ,column =1 ,sticky ="e",padx =(6 ,0 ))
+        self .button (entry_row ,"Auto Find",self .auto_detect_port ,"green").grid (row =0 ,column =2 ,sticky ="e",padx =(6 ,0 ))
+
+    def action_card (self ,parent ,title ,body ,accent_key ,button_text ,command ,column ):
+        c =self .colors 
+        card =tk .Frame (parent ,bg =c ["panel"],padx =14 ,pady =10 ,highlightbackground =c ["border"],highlightthickness =1 )
+        card .grid (row =0 ,column =column ,sticky ="nsew",padx =(0 if column ==0 else 8 ,0 if column ==2 else 8 ))
+        card .grid_columnconfigure (0 ,weight =1 )
+        tk .Frame (card ,bg =c [accent_key ],height =4 ).grid (row =0 ,column =0 ,sticky ="ew",pady =(0 ,10 ))
+        self .label (card ,title ,12 ,"bold",c ["text"]).grid (row =1 ,column =0 ,sticky ="w")
+        self .label (card ,body ,9 ,"normal",c ["muted"],wraplength =220 ,justify ="left").grid (
+        row =2 ,column =0 ,sticky ="ew",pady =(6 ,10 )
+        )
+        self .button (card ,button_text ,command ,accent_key ).grid (row =3 ,column =0 ,sticky ="ew")
+
+    def stat_card (self ,parent ,title ,key ,row ):
+        c =self .colors 
+        card =tk .Frame (parent ,bg =c ["panel_alt"],padx =12 ,pady =8 ,highlightbackground =c ["border"],highlightthickness =1 )
+        card .grid (row =row ,column =0 ,sticky ="ew",pady =(0 ,8 ))
+        card .grid_columnconfigure (0 ,weight =1 )
+        self .label (card ,title ,9 ,"normal",c ["muted"]).grid (row =0 ,column =0 ,sticky ="w")
+        value =self .label (card ,"...",15 ,"bold",c ["text"])
+        value .grid (row =1 ,column =0 ,sticky ="w",pady =(3 ,0 ))
+        self .stat_labels [key ]=value 
+
+    def label (self ,parent ,text ,size ,weight ,fg ,**kwargs ):
+        return tk .Label (
+        parent ,
+        text =text ,
+        bg =parent .cget ("bg"),
+        fg =fg ,
+        font =("Segoe UI",size ,weight ),
+        **kwargs ,
+        )
+
+    def button (self ,parent ,text ,command ,kind ):
+        c =self .colors 
+        styles ={
+        "green":(c ["green"],"#041411",c ["green_hover"]),
+        "pink":(c ["pink"],"#1c0712",c ["pink_hover"]),
+        "secondary":(c ["panel_alt"],c ["text"],c ["border"]),
+        "outline":(c ["panel"],c ["muted"],c ["panel_alt"]),
+        "danger":(c ["danger"],"#18070a",c ["danger_hover"]),
         }
-        bg, fg, hover = styles[kind]
-        widget = tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=bg,
-            fg=fg,
-            activebackground=hover,
-            activeforeground=fg,
-            relief="flat",
-            bd=0,
-            cursor="hand2",
-            font=("Segoe UI", 10, "bold"),
-            padx=12,
-            pady=8,
+        bg ,fg ,hover =styles [kind ]
+        widget =tk .Button (
+        parent ,
+        text =text ,
+        command =command ,
+        bg =bg ,
+        fg =fg ,
+        activebackground =hover ,
+        activeforeground =fg ,
+        relief ="flat",
+        bd =0 ,
+        cursor ="hand2",
+        font =("Segoe UI",10 ,"bold"),
+        padx =12 ,
+        pady =8 ,
         )
-        widget.bind("<Enter>", lambda _event: widget.configure(bg=hover))
-        widget.bind("<Leave>", lambda _event: widget.configure(bg=bg))
-        return widget
+        widget .bind ("<Enter>",lambda _event :widget .configure (bg =hover ))
+        widget .bind ("<Leave>",lambda _event :widget .configure (bg =bg ))
+        return widget 
 
-    def toggle_switch(self, parent, variable, command):
-        c = self.colors
-        is_on = variable.get()
-        wrapper = tk.Frame(parent, bg=parent.cget("bg"), cursor="hand2")
-        wrapper.grid_columnconfigure(0, weight=1)
+    def toggle_switch (self ,parent ,variable ,command ):
+        c =self .colors 
+        is_on =variable .get ()
+        wrapper =tk .Frame (parent ,bg =parent .cget ("bg"),cursor ="hand2")
+        wrapper .grid_columnconfigure (0 ,weight =1 )
 
-        canvas = tk.Canvas(
-            wrapper,
-            width=68,
-            height=34,
-            bg=parent.cget("bg"),
-            highlightthickness=0,
-            bd=0,
-            cursor="hand2",
+        canvas =tk .Canvas (
+        wrapper ,
+        width =68 ,
+        height =34 ,
+        bg =parent .cget ("bg"),
+        highlightthickness =0 ,
+        bd =0 ,
+        cursor ="hand2",
         )
-        canvas.grid(row=0, column=0, sticky="e")
+        canvas .grid (row =0 ,column =0 ,sticky ="e")
 
-        track = c["green"] if is_on else c["panel_alt"]
-        knob = "#ffffff" if is_on else c["muted"]
-        outline = c["green"] if is_on else c["border"]
-        text = "ON" if is_on else "OFF"
-        text_x = 24 if is_on else 44
-        knob_x = 51 if is_on else 17
+        track =c ["green"]if is_on else c ["panel_alt"]
+        knob ="#ffffff"if is_on else c ["muted"]
+        outline =c ["green"]if is_on else c ["border"]
+        text ="ON"if is_on else "OFF"
+        text_x =24 if is_on else 44 
+        knob_x =51 if is_on else 17 
 
-        canvas.create_oval(2, 2, 34, 32, fill=track, outline=outline)
-        canvas.create_oval(34, 2, 66, 32, fill=track, outline=outline)
-        canvas.create_rectangle(18, 2, 50, 32, fill=track, outline=track)
-        canvas.create_text(
-            text_x,
-            17,
-            text=text,
-            fill=c["field"] if is_on else c["muted"],
-            font=("Segoe UI", 7, "bold"),
+        canvas .create_oval (2 ,2 ,34 ,32 ,fill =track ,outline =outline )
+        canvas .create_oval (34 ,2 ,66 ,32 ,fill =track ,outline =outline )
+        canvas .create_rectangle (18 ,2 ,50 ,32 ,fill =track ,outline =track )
+        canvas .create_text (
+        text_x ,
+        17 ,
+        text =text ,
+        fill =c ["field"]if is_on else c ["muted"],
+        font =("Segoe UI",7 ,"bold"),
         )
-        canvas.create_oval(knob_x - 12, 5, knob_x + 12, 29, fill=knob, outline=knob)
+        canvas .create_oval (knob_x -12 ,5 ,knob_x +12 ,29 ,fill =knob ,outline =knob )
 
-        state_label = self.label(
-            wrapper,
-            "On" if is_on else "Off",
-            10,
-            "bold",
-            c["green"] if is_on else c["muted"],
+        state_label =self .label (
+        wrapper ,
+        "On"if is_on else "Off",
+        10 ,
+        "bold",
+        c ["green"]if is_on else c ["muted"],
         )
-        state_label.grid(row=1, column=0, sticky="e", pady=(3, 0))
+        state_label .grid (row =1 ,column =0 ,sticky ="e",pady =(3 ,0 ))
 
-        wrapper.bind("<Button-1>", lambda _event: command())
-        canvas.bind("<Button-1>", lambda _event: command())
-        state_label.bind("<Button-1>", lambda _event: command())
-        return wrapper
+        wrapper .bind ("<Button-1>",lambda _event :command ())
+        canvas .bind ("<Button-1>",lambda _event :command ())
+        state_label .bind ("<Button-1>",lambda _event :command ())
+        return wrapper 
 
-    def pill(self, parent, text):
-        c = self.colors
-        return tk.Label(
-            parent,
-            text=text,
-            bg=c["panel_alt"],
-            fg=c["green"],
-            font=("Segoe UI", 10, "bold"),
-            padx=16,
-            pady=6,
+    def pill (self ,parent ,text ):
+        c =self .colors 
+        return tk .Label (
+        parent ,
+        text =text ,
+        bg =c ["panel_alt"],
+        fg =c ["green"],
+        font =("Segoe UI",10 ,"bold"),
+        padx =16 ,
+        pady =6 ,
         )
 
-    def toggle_theme(self):
-        self.theme_name = "light" if self.theme_name == "dark" else "dark"
-        self.build_ui()
-        self.append_log("GUI", f"Theme changed to {self.theme_name}.")
+    def toggle_theme (self ):
+        self .theme_name ="light"if self .theme_name =="dark"else "dark"
+        self .build_ui ()
+        self .append_log ("GUI",f"Theme changed to {self.theme_name}.")
 
-    def toggle_arduino_access(self):
-        self.arduino_enabled.set(not self.arduino_enabled.get())
-        state = "enabled" if self.arduino_enabled.get() else "disabled"
-        self.build_ui()
-        self.append_log("Arduino", f"Access {state}. Restart any running tracker to apply this.")
+    def toggle_arduino_access (self ):
+        self .arduino_enabled .set (not self .arduino_enabled .get ())
+        state ="enabled"if self .arduino_enabled .get ()else "disabled"
+        self .build_ui ()
+        self .append_log ("Arduino",f"Access {state}. Restart any running tracker to apply this.")
 
-    def current_com_port(self):
-        return self.com_port.get().strip().upper() or detect_arduino_port("COM3")
+    def current_com_port (self ):
+        return self .com_port .get ().strip ().upper ()or detect_arduino_port ("COM3")
 
-    def normalized_com_port(self):
-        port = self.current_com_port()
-        self.com_port.set(port)
-        return port
+    def normalized_com_port (self ):
+        port =self .current_com_port ()
+        self .com_port .set (port )
+        return port 
 
-    def apply_com_port(self):
-        port = self.normalized_com_port()
-        active = [name for name, proc in self.processes.items() if proc.poll() is None]
-        note = " Restart running trackers to apply it." if active else ""
-        self.append_log("Arduino", f"COM port set to {port}.{note}")
-        self.refresh_status()
+    def apply_com_port (self ):
+        port =self .normalized_com_port ()
+        active =[name for name ,proc in self .processes .items ()if proc .poll ()is None ]
+        note =" Restart running trackers to apply it."if active else ""
+        self .append_log ("Arduino",f"COM port set to {port}.{note}")
+        self .refresh_status ()
 
-    def launch_script(self, task_name: str):
-        """Launch a tracker or trainer task by name.
+    def auto_detect_port (self ):
+        detected =detect_arduino_port (None )
+        if detected :
+            self .com_port .set (detected )
+            self .arduino_enabled .set (True )
+            self .apply_com_port ()
+            ports =available_serial_ports ()
+            desc =""
+            for p in ports :
+                if p .device ==detected :
+                    desc =f" ({p.description})"
+                    break 
+            self .append_log ("Arduino",f"Auto-detected port: {detected}{desc}")
+            self .build_ui ()
+        else :
+            self .append_log ("Arduino","No Arduino or serial ports detected. Check USB connection.")
+            messagebox .showinfo ("Auto Find Port","No serial ports detected. Please connect your Arduino and try again.")
+        self .refresh_status ()
 
-        When frozen (single onefile EXE): re-launches *this same EXE* with
-        ``--mode <flag>`` so the correct sub-module runs in a subprocess.
-        In dev mode: runs the source .py script with the current Python.
-        """
-        script_path, mode_flag = TASK_CONFIGS[task_name]
+    def launch_script (self ,task_name :str ):
+        script_path ,mode_flag =TASK_CONFIGS [task_name ]
 
-        existing = self.processes.get(task_name)
-        if existing and existing.poll() is None:
-            self.append_log("GUI", f"{task_name} is already running.")
-            return
+        existing =self .processes .get (task_name )
+        if existing and existing .poll ()is None :
+            self .append_log ("GUI",f"{task_name} is already running.")
+            return 
 
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        env["FACE_TRACKER_USE_ARDUINO"] = "1" if self.arduino_enabled.get() else "0"
-        env["FACE_TRACKER_COM_PORT"] = self.normalized_com_port()
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform.startswith("win") else 0
+        env =os .environ .copy ()
+        env ["PYTHONUNBUFFERED"]="1"
+        env ["FACE_TRACKER_USE_ARDUINO"]="1"if self .arduino_enabled .get ()else "0"
+        env ["FACE_TRACKER_COM_PORT"]=self .normalized_com_port ()
+        creationflags =subprocess .CREATE_NEW_PROCESS_GROUP if sys .platform .startswith ("win")else 0 
 
-        try:
-            if getattr(sys, "frozen", False):
-                # Single onefile EXE: re-launch self in the requested sub-mode.
-                cmd = [sys.executable, "--mode", mode_flag]
-            else:
-                # Dev mode: run the .py script with the active Python interpreter.
-                if not script_path.exists():
-                    self.append_log("GUI", f"Missing script: {script_path}")
-                    messagebox.showerror("Missing file", f"Could not find:\n{script_path}")
-                    return
-                cmd = [sys.executable, "-u", str(script_path)]
+        try :
+            if getattr (sys ,"frozen",False ):
+                cmd =[sys .executable ,"--mode",mode_flag ]
+            else :
+                if not script_path .exists ():
+                    self .append_log ("GUI",f"Missing script: {script_path}")
+                    messagebox .showerror ("Missing file",f"Could not find:\n{script_path}")
+                    return 
+                cmd =[sys .executable ,"-u",str (script_path )]
 
-            process = subprocess.Popen(
-                cmd,
-                cwd=str(APP_DIR),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                text=True,
-                bufsize=1,
-                env=env,
-                creationflags=creationflags,
+            process =subprocess .Popen (
+            cmd ,
+            cwd =str (APP_DIR ),
+            stdout =subprocess .PIPE ,
+            stderr =subprocess .STDOUT ,
+            stdin =subprocess .DEVNULL ,
+            text =True ,
+            bufsize =1 ,
+            env =env ,
+            creationflags =creationflags ,
             )
-        except Exception as exc:
-            self.append_log("GUI", f"Could not start {task_name}: {exc}")
-            messagebox.showerror("Launch failed", str(exc))
-            return
+        except Exception as exc :
+            self .append_log ("GUI",f"Could not start {task_name}: {exc}")
+            messagebox .showerror ("Launch failed",str (exc ))
+            return 
 
-        self.processes[task_name] = process
-        self.append_log("GUI", f"Started {task_name}. Use the OpenCV window controls inside that task.")
-        if task_name in ("LBPH Tracker", "Basic Tracker"):
-            state = "on" if self.arduino_enabled.get() else "off"
-            self.append_log("Arduino", f"Access {state}; port {self.normalized_com_port()}.")
-        threading.Thread(target=self.read_process_output, args=(task_name, process), daemon=True).start()
-        self.refresh_status()
+        self .processes [task_name ]=process 
+        self .append_log ("GUI",f"Started {task_name}. Use the OpenCV window controls inside that task.")
+        if task_name in ("LBPH Tracker","Basic Tracker"):
+            state ="on"if self .arduino_enabled .get ()else "off"
+            self .append_log ("Arduino",f"Access {state}; port {self.normalized_com_port()}.")
+        threading .Thread (target =self .read_process_output ,args =(task_name ,process ),daemon =True ).start ()
+        self .refresh_status ()
 
-    def read_process_output(self, name, process):
-        if process.stdout:
-            for line in process.stdout:
-                clean_line = line.rstrip()
-                if clean_line:
-                    self.output_queue.put(("line", name, clean_line))
-        return_code = process.wait()
-        self.output_queue.put(("exit", name, return_code))
+    def read_process_output (self ,name ,process ):
+        if process .stdout :
+            for line in process .stdout :
+                clean_line =line .rstrip ()
+                if clean_line :
+                    self .output_queue .put (("line",name ,clean_line ))
+        return_code =process .wait ()
+        self .output_queue .put (("exit",name ,return_code ))
 
-    def drain_output_queue(self):
-        try:
-            while True:
-                item = self.output_queue.get_nowait()
-                if item[0] == "line":
-                    _, name, line = item
-                    self.append_log(name, line)
-                elif item[0] == "exit":
-                    _, name, return_code = item
-                    self.processes.pop(name, None)
-                    self.append_log("GUI", f"{name} finished with exit code {return_code}.")
-                    self.refresh_status()
-        except queue.Empty:
-            pass
-        self.after(150, self.drain_output_queue)
+    def drain_output_queue (self ):
+        try :
+            while True :
+                item =self .output_queue .get_nowait ()
+                if item [0 ]=="line":
+                    _ ,name ,line =item 
+                    self .append_log (name ,line )
+                elif item [0 ]=="exit":
+                    _ ,name ,return_code =item 
+                    self .processes .pop (name ,None )
+                    self .append_log ("GUI",f"{name} finished with exit code {return_code}.")
+                    self .refresh_status ()
+        except queue .Empty :
+            pass 
+        self .after (150 ,self .drain_output_queue )
 
-    def stop_all_processes(self):
-        running = [(name, proc) for name, proc in self.processes.items() if proc.poll() is None]
-        if not running:
-            self.append_log("GUI", "No running tasks to stop.")
-            return
-        for name, process in running:
-            try:
-                process.terminate()
-                self.append_log("GUI", f"Stop requested for {name}.")
-            except Exception as exc:
-                self.append_log("GUI", f"Could not stop {name}: {exc}")
-        self.refresh_status()
+    def stop_all_processes (self ):
+        running =[(name ,proc )for name ,proc in self .processes .items ()if proc .poll ()is None ]
+        if not running :
+            self .append_log ("GUI","No running tasks to stop.")
+            return 
+        for name ,process in running :
+            try :
+                process .terminate ()
+                self .append_log ("GUI",f"Stop requested for {name}.")
+            except Exception as exc :
+                self .append_log ("GUI",f"Could not stop {name}: {exc}")
+        self .refresh_status ()
 
-    def check_setup(self):
-        self.append_log("Setup", f"Python: {sys.version.split()[0]}")
-        cv2_spec = importlib.util.find_spec("cv2")
-        serial_spec = importlib.util.find_spec("serial")
+    def check_setup (self ):
+        self .append_log ("Setup",f"Python: {sys.version.split()[0]}")
+        cv2_spec =importlib .util .find_spec ("cv2")
+        serial_spec =importlib .util .find_spec ("serial")
 
-        if cv2_spec is None:
-            self.append_log("Setup", "OpenCV is not installed.")
-        else:
-            try:
-                import cv2
+        if cv2_spec is None :
+            self .append_log ("Setup","OpenCV is not installed.")
+        else :
+            try :
+                import cv2 
 
-                has_face = hasattr(cv2, "face")
-                self.append_log("Setup", f"OpenCV: {cv2.__version__}")
-                self.append_log("Setup", f"LBPH support: {'available' if has_face else 'missing cv2.face'}")
-            except Exception as exc:
-                self.append_log("Setup", f"OpenCV import failed: {exc}")
+                has_face =hasattr (cv2 ,"face")
+                self .append_log ("Setup",f"OpenCV: {cv2.__version__}")
+                self .append_log ("Setup",f"LBPH support: {'available' if has_face else 'missing cv2.face'}")
+            except Exception as exc :
+                self .append_log ("Setup",f"OpenCV import failed: {exc}")
 
-        self.append_log("Setup", f"PySerial: {'available' if serial_spec else 'missing'}")
-        self.append_log("Setup", f"Serial ports: {format_serial_ports()}")
-        state = "enabled" if self.arduino_enabled.get() else "disabled"
-        self.append_log("Setup", f"Arduino setting: {state} on {self.normalized_com_port()}")
-        self.refresh_status()
+        self .append_log ("Setup",f"PySerial: {'available' if serial_spec else 'missing'}")
+        self .append_log ("Setup",f"Serial ports: {format_serial_ports()}")
+        state ="enabled"if self .arduino_enabled .get ()else "disabled"
+        self .append_log ("Setup",f"Arduino setting: {state} on {self.normalized_com_port()}")
+        self .refresh_status ()
 
-    def open_path(self, path):
-        path = Path(path)
-        if not path.exists():
-            self.append_log("GUI", f"Path not found: {path}")
-            messagebox.showwarning("Not found", f"Could not find:\n{path}")
-            return
-        try:
-            if sys.platform.startswith("win"):
-                os.startfile(path)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
-            else:
-                subprocess.Popen(["xdg-open", str(path)])
-            self.append_log("GUI", f"Opened {path.name}.")
-        except Exception as exc:
-            self.append_log("GUI", f"Could not open {path}: {exc}")
-            messagebox.showerror("Open failed", str(exc))
+    def open_path (self ,path ):
+        if callable (path ):
+            path =path ()
+        path =Path (path )
+        if not path .exists ():
+            if hasattr (sys ,"_MEIPASS")and "facearduino"in str (path ):
+                path =get_arduino_sketch_path ()
+        if not path .exists ():
+            self .append_log ("GUI",f"Path not found: {path}")
+            messagebox .showwarning ("Not found",f"Could not find:\n{path}")
+            return 
+        try :
+            if sys .platform .startswith ("win"):
+                os .startfile (path )
+            elif sys .platform =="darwin":
+                subprocess .Popen (["open",str (path )])
+            else :
+                subprocess .Popen (["xdg-open",str (path )])
+            self .append_log ("GUI",f"Opened {path.name}.")
+        except Exception as exc :
+            self .append_log ("GUI",f"Could not open {path}: {exc}")
+            messagebox .showerror ("Open failed",str (exc ))
 
-    def refresh_status_loop(self):
-        self.refresh_status()
-        self.after(1500, self.refresh_status_loop)
+    def refresh_status_loop (self ):
+        self .refresh_status ()
+        self .after (1500 ,self .refresh_status_loop )
 
-    def refresh_status(self):
-        dataset_count = len(list(DATASET_DIR.glob("*.jpg"))) if DATASET_DIR.exists() else 0
-        if "dataset" in self.stat_labels:
-            self.stat_labels["dataset"].configure(text=f"{dataset_count} JPGs")
+    def refresh_status (self ):
+        dataset_count =len (list (DATASET_DIR .glob ("*.jpg")))if DATASET_DIR .exists ()else 0 
+        if "dataset"in self .stat_labels :
+            self .stat_labels ["dataset"].configure (text =f"{dataset_count} JPGs")
 
-        if MODEL_FILE.exists():
-            updated = time.strftime("%d %b, %I:%M %p", time.localtime(MODEL_FILE.stat().st_mtime))
-            model_text = f"Ready\n{updated}"
-        else:
-            model_text = "Missing"
-        if "model" in self.stat_labels:
-            self.stat_labels["model"].configure(text=model_text)
+        if MODEL_FILE .exists ():
+            updated =time .strftime ("%d %b, %I:%M %p",time .localtime (MODEL_FILE .stat ().st_mtime ))
+            model_text =f"Ready\n{updated}"
+        else :
+            model_text ="Missing"
+        if "model"in self .stat_labels :
+            self .stat_labels ["model"].configure (text =model_text )
 
-        arduino_text = f"On\n{self.current_com_port()}" if self.arduino_enabled.get() else f"Off\n{self.current_com_port()}"
-        if "arduino" in self.stat_labels:
-            self.stat_labels["arduino"].configure(text=arduino_text)
+        arduino_text =f"On\n{self.current_com_port()}"if self .arduino_enabled .get ()else f"Off\n{self.current_com_port()}"
+        if "arduino"in self .stat_labels :
+            self .stat_labels ["arduino"].configure (text =arduino_text )
 
-        active = [name for name, proc in self.processes.items() if proc.poll() is None]
-        running_text = ", ".join(active) if active else "Idle"
-        if "running" in self.stat_labels:
-            self.stat_labels["running"].configure(text=running_text)
-        if "status_pill" in self.process_labels:
-            self.process_labels["status_pill"].configure(text=running_text)
+        active =[name for name ,proc in self .processes .items ()if proc .poll ()is None ]
+        running_text =", ".join (active )if active else "Idle"
+        if "running"in self .stat_labels :
+            self .stat_labels ["running"].configure (text =running_text )
+        if "status_pill"in self .process_labels :
+            self .process_labels ["status_pill"].configure (text =running_text )
 
-    def append_log(self, source, message):
-        timestamp = time.strftime("%H:%M:%S")
-        line = f"[{timestamp}] {source}: {message}"
-        self.log_lines.append(line)
-        self.log_lines = self.log_lines[-300:]
-        if self.log_box is not None:
-            self.log_box.configure(state="normal")
-            self.log_box.insert("end", line + "\n")
-            self.log_box.see("end")
-            self.log_box.configure(state="disabled")
+    def append_log (self ,source ,message ):
+        timestamp =time .strftime ("%H:%M:%S")
+        line =f"[{timestamp}] {source}: {message}"
+        self .log_lines .append (line )
+        self .log_lines =self .log_lines [-300 :]
+        if self .log_box is not None :
+            self .log_box .configure (state ="normal")
+            self .log_box .insert ("end",line +"\n")
+            self .log_box .see ("end")
+            self .log_box .configure (state ="disabled")
 
-    def restore_log(self):
-        if self.log_box is None:
-            return
-        self.log_box.configure(state="normal")
-        self.log_box.delete("1.0", "end")
-        if self.log_lines:
-            self.log_box.insert("end", "\n".join(self.log_lines) + "\n")
-        else:
-            self.log_box.insert("end", "Ready. Start training or launch a tracker when you are set.\n")
-        self.log_box.configure(state="disabled")
+    def restore_log (self ):
+        if self .log_box is None :
+            return 
+        self .log_box .configure (state ="normal")
+        self .log_box .delete ("1.0","end")
+        if self .log_lines :
+            self .log_box .insert ("end","\n".join (self .log_lines )+"\n")
+        else :
+            self .log_box .insert ("end","Ready. Start training or launch a tracker when you are set.\n")
+        self .log_box .configure (state ="disabled")
 
-    def clear_log(self):
-        self.log_lines.clear()
-        self.restore_log()
+    def clear_log (self ):
+        self .log_lines .clear ()
+        self .restore_log ()
 
-    def on_close(self):
-        running = [proc for proc in self.processes.values() if proc.poll() is None]
-        if running:
-            should_close = messagebox.askyesno(
-                "Close Face Tracker",
-                "A tracker or trainer is still running. Stop it and close the dashboard?",
+    def on_close (self ):
+        running =[proc for proc in self .processes .values ()if proc .poll ()is None ]
+        if running :
+            should_close =messagebox .askyesno (
+            "Close Face Tracker",
+            "A tracker or trainer is still running. Stop it and close the dashboard?",
             )
-            if not should_close:
-                return
-            self.stop_all_processes()
-        self.destroy()
+            if not should_close :
+                return 
+            self .stop_all_processes ()
+        self .destroy ()
 
 
-if __name__ == "__main__":
-    FaceTrackerGUI().mainloop()
+if __name__ =="__main__":
+    FaceTrackerGUI ().mainloop ()

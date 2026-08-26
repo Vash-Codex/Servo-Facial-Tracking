@@ -1,4 +1,3 @@
-# Python
 .venv/
 __pycache__/
 *.py[cod]
@@ -6,13 +5,11 @@ __pycache__/
 dist/
 build/
 
-# Private local data — do not publish
 dataset/
 custom face/face_model.xml
 vids/
 .wakatime-project
 
-# IDE / OS
 .vscode/
 .idea/
 *.swp

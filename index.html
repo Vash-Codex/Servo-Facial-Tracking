@@ -1235,7 +1235,6 @@
   </header>
 
   <section class="hero" id="top">
-    <!-- Fullscreen background video -->
     <video
       class="hero-video"
       src="video.mp4"
@@ -1246,14 +1245,12 @@
       aria-hidden="true"
     ></video>
 
-    <!-- Cinematic gradient overlay -->
     <div class="hero-overlay" aria-hidden="true"></div>
 
-    <!-- Animated green scanline over video -->
     <div class="hero-scanline" aria-hidden="true"></div>
 
 
-    <!-- Hero copy -->
+
     <div class="hero-content">
       <div class="hero-chip">OpenCV · LBPH · Arduino Servo</div>
       <h1>Face <span class="gradient-word">Tracker</span></h1>
@@ -1545,9 +1542,6 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
       </div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════════════
-         SCHEMATICS
-    ══════════════════════════════════════════════════════════ -->
     <section id="schematics" aria-labelledby="schematics-title">
       <div class="section-title">
         <h2 id="schematics-title">Circuit Schematics</h2>
@@ -1555,11 +1549,10 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
       </div>
       <div class="schematic-wrap">
 
-        <!-- SVG schematic diagram -->
         <div class="schematic-diagram">
           <svg viewBox="0 0 520 380" fill="none" xmlns="http://www.w3.org/2000/svg"
                role="img" aria-label="Arduino to servo wiring schematic">
-            <!-- background grid -->
+
             <defs>
               <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                 <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor"
@@ -1569,41 +1562,37 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
             <rect width="520" height="380" fill="var(--surface-strong)"/>
             <rect width="520" height="380" fill="url(#grid)" color="var(--border)"/>
 
-            <!-- Arduino board body -->
             <rect x="30" y="100" width="130" height="200" rx="6"
                   fill="var(--surface)" stroke="var(--green)" stroke-width="2"/>
             <text x="95" y="93" text-anchor="middle" font-size="11"
                   fill="var(--green)" font-weight="700" font-family="Consolas,monospace">ARDUINO UNO</text>
 
-            <!-- Arduino pin labels -->
-            <!-- GND -->
             <rect x="30" y="130" width="18" height="12" rx="2"
                   fill="var(--surface-strong)" stroke="var(--border)"/>
             <text x="54" y="140" font-size="9" fill="var(--muted)" font-family="Consolas,monospace">GND</text>
-            <!-- 5V -->
+
             <rect x="30" y="155" width="18" height="12" rx="2"
                   fill="var(--surface-strong)" stroke="var(--border)"/>
             <text x="54" y="165" font-size="9" fill="var(--muted)" font-family="Consolas,monospace">5V</text>
-            <!-- D9 -->
+
             <rect x="30" y="180" width="18" height="12" rx="2"
                   fill="var(--surface-strong)" stroke="var(--border)"/>
             <text x="54" y="190" font-size="9" fill="var(--muted)" font-family="Consolas,monospace">D9 (PWM)</text>
-            <!-- USB -->
+
             <rect x="142" y="200" width="22" height="36" rx="3"
                   fill="var(--surface-strong)" stroke="var(--border)" stroke-width="1.5"/>
             <text x="153" y="260" text-anchor="middle" font-size="8"
                   fill="var(--muted)" font-family="Consolas,monospace">USB</text>
 
-            <!-- Servo body -->
             <rect x="310" y="120" width="100" height="80" rx="6"
                   fill="var(--surface)" stroke="var(--pink)" stroke-width="2"/>
             <text x="360" y="115" text-anchor="middle" font-size="11"
                   fill="var(--pink)" font-weight="700" font-family="Consolas,monospace">SERVO</text>
-            <!-- servo horn -->
+
             <rect x="405" y="148" width="30" height="24" rx="4"
                   fill="var(--surface-strong)" stroke="var(--border)"/>
             <circle cx="420" cy="160" r="6" fill="none" stroke="var(--pink)" stroke-width="2"/>
-            <!-- servo wire terminals -->
+
             <rect x="316" y="168" width="10" height="10" rx="2" fill="#222"
                   stroke="var(--border)"/>
             <text x="321" y="176" text-anchor="middle" font-size="7"
@@ -1617,28 +1606,25 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
             <text x="353" y="176" text-anchor="middle" font-size="7"
                   fill="#333" font-family="Consolas,monospace">SIG</text>
 
-            <!-- Wire: GND Arduino → GND Servo (dark/black) -->
             <polyline points="30,136 10,136 10,340 305,340 305,173 316,173"
                       stroke="#555" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
-            <!-- Wire: 5V Arduino → 5V Servo (red) -->
+
             <polyline points="30,161 14,161 14,350 308,350 308,173 332,173"
                       stroke="#d44" stroke-width="2" fill="none"/>
-            <!-- Wire: D9 → Signal Servo (yellow/green accent) -->
+
             <polyline points="48,186 48,186 48,220 290,220 290,173 348,173"
                       stroke="var(--green)" stroke-width="2.5" fill="none"/>
 
-            <!-- PC / Python label -->
             <rect x="30" y="320" width="130" height="36" rx="6"
                   fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
             <text x="95" y="338" text-anchor="middle" font-size="10"
                   fill="var(--text)" font-family="Consolas,monospace" font-weight="700">PC / Python</text>
             <text x="95" y="350" text-anchor="middle" font-size="9"
                   fill="var(--muted)" font-family="Consolas,monospace">pyserial → COM port</text>
-            <!-- USB line PC → Arduino -->
+
             <line x1="153" y1="320" x2="153" y2="236" stroke="var(--border)" stroke-width="1.5"
                   stroke-dasharray="4,3"/>
 
-            <!-- legend -->
             <line x1="30" y1="370" x2="60" y2="370" stroke="var(--green)" stroke-width="2.5"/>
             <text x="66" y="374" font-size="9" fill="var(--muted)" font-family="Consolas,monospace">Signal (D9)</text>
             <line x1="145" y1="370" x2="175" y2="370" stroke="#d44" stroke-width="2"/>
@@ -1648,7 +1634,6 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
           </svg>
         </div>
 
-        <!-- Wiring table -->
         <div>
           <div class="card" style="padding: 0; overflow: hidden;">
             <table class="wiring-table" aria-label="Pin wiring reference table">
@@ -1703,9 +1688,7 @@ FACE_TRACKER_COM_PORT=COM10</code></pre>
       </div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════════════
-         DEMO VIDEO
-    ══════════════════════════════════════════════════════════ -->
+
     <section id="demo-video" aria-labelledby="demo-video-title">
       <div class="section-title">
         <h2 id="demo-video-title">Demo Video</h2>

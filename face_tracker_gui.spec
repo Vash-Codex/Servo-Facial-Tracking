@@ -56,17 +56,19 @@ if DATASET_DATA:
 #   train_lbph and face_tracker_lbph are importable as top-level modules.
 # ---------------------------------------------------------------------------
 HIDDEN = [
-    # Sub-scripts (dispatched at runtime)
     "face",
     "train_lbph",
     "face_tracker_lbph",
-    # PySerial
     "serial",
     "serial.tools",
     "serial.tools.list_ports",
     "serial.tools.list_ports_common",
     "serial.tools.list_ports_windows",
-    # OpenCV
+    "serial.serialwin32",
+    "serial.win32",
+    "serial.serialposix",
+    "serial.serialjava",
+    "serial.serialcli",
     "cv2",
 ]
 
