@@ -1,164 +1,98 @@
-# Servo Facial Tracking
+Servo Facial Tracking
 
-> [!CAUTION]
-> **AI Usage Notice**: Parts of this project, including GUI design, and debugging were developed with the assistance of AI tools. Please review code and test hardware setups carefully before deployment.
+A Python and Arduino-based system that detects and tracks a face using a webcam and moves a servo according to the person's horizontal movement.
 
-A face recognition and camera-tracking system built with Python, OpenCV, and Arduino. It trains a custom LBPH (Local Binary Patterns Histograms) model on your face using a webcam, tracks your movement, and sends pan angles over serial to an Arduino-controlled servo motor.
+The project uses OpenCV for face detection and a custom LBPH model to recognize the target face. A Tkinter GUI is included to make dataset collection, training, serial settings, and tracking easier to manage.
 
-Includes a Tkinter GUI dashboard (`face_tracker_gui.py`) to manage dataset capture, model training, serial settings, and tracker execution.
+Features
+Face detection and tracking using OpenCV
+Custom LBPH face recognition
+Servo follows only the trained/recognized face
+Smooth servo movement with deadzone and position averaging
+Tkinter GUI for controlling the project
+Manual controls using keyboard
+Works completely offline
+Supports basic tracking without face recognition
+Hardware
+Arduino Uno or Nano
+SG90 / MG90S servo
+Webcam
+Computer running Python
+Servo wiring
+Signal → D9
+VCC → 5V
+GND → GND
 
----
+For larger servos, use an external 5V supply and connect its GND to the Arduino GND.
 
-## Features
+The Arduino communicates with the Python program at 9600 baud.
 
-- **Tkinter Dashboard**: Manage camera capture, training, and tracking from a single interface.
-- **Custom Face Recognition**: Collects face images locally to build a personal LBPH recognizer (`face_model.xml`).
-- **Identity-Filtered Tracking**: Servo only follows your face (ignores unrecognized faces).
-- **Smoothed Motor Movement**: Deadzone, acceleration limiting, and position averaging reduce servo jitter.
-- **Manual & Basic Tracking Modes**: Supports manual keyboard overrides (`A`/`D` keys) and simple face-tracking without LBPH training (`face.py`).
-- **Offline & Private**: All image processing and model files stay local.
-
----
-
-## Hardware & Wiring
-
-- **Microcontroller**: Arduino Uno or Nano
-- **Servo Motor**: SG90, MG90S, or similar (180° range)
-- **Connections**:
-  - **Signal**: Pin **D9** (Orange/Yellow wire)
-  - **Power**: **5V** (Red wire) — *use an external 5V supply with shared GND for larger servos*
-  - **Ground**: **GND** (Brown/Black wire)
-
-**Serial Protocol**: 9600 baud. The tracker maps horizontal face position across the camera frame to servo angles (default **45°–135°**) and sends integer angles ended with newline (`\n`).
-
----
-
-## Project Structure
-
-```
+Project Structure
 face tracker/
-├── face_tracker_gui.py          # Main GUI dashboard
-├── face.py                      # Basic Haar-cascade face tracker
-├── requirements.txt             # Python dependencies
+├── face_tracker_gui.py
+├── face.py
+├── requirements.txt
 ├── README.md
 │
 ├── custom face/
-│   ├── train_lbph.py            # Dataset collector & model trainer
-│   ├── face_tracker_lbph.py     # LBPH face tracker & serial controller
-│   └── face_model.xml           # Trained model (generated locally)
+│   ├── train_lbph.py
+│   ├── face_tracker_lbph.py
+│   └── face_model.xml
 │
-├── dataset/                     # Captured face crops (generated locally)
+├── dataset/
 ├── facearduino/
-│   └── facearduino.ino          # Arduino C++ sketch (pin D9, 9600 baud)
-└── vids/                        # Recorded demo videos (optional)
-```
+│   └── facearduino.ino
+│
+└── vids/
 
----
+face_model.xml and the dataset folder are generated locally while training.
 
-## Quick Setup
+Setup
 
-### 1. Installation
+Create a virtual environment and install the requirements:
 
-Requires Python 3.10+ and `opencv-contrib-python`.
-
-```powershell
-# Navigate to project directory
-cd "C:\path\to\face tracker"
-
-# Create & activate virtual environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# Install requirements
 pip install -r requirements.txt
-```
 
-> **Note**: `opencv-contrib-python` is required (not standard `opencv-python`) because it includes the OpenCV `face` module (`LBPHFaceRecognizer`).
+Make sure opencv-contrib-python is installed, since the normal OpenCV package does not include the LBPH face recognizer.
 
-### 2. Arduino Setup
+Upload facearduino/facearduino.ino to the Arduino and connect the servo to D9.
 
-1. Open `facearduino/facearduino.ino` in the Arduino IDE.
-2. Connect your Arduino board via USB and wire the servo signal to pin **D9**.
-3. Select your board and COM port, then click **Upload**.
-4. Note your COM port (e.g., `COM10`).
+Then start the dashboard:
 
----
-
-## Usage
-
-Run the GUI dashboard:
-
-```powershell
 python face_tracker_gui.py
-```
+Training
 
-### Workflow
+Start the training program and press Space to capture face samples. Around 20–50 samples from different angles and lighting conditions usually work well.
 
-1. **Train Model**:
-   - Click **Start Training** (or run `python "custom face/train_lbph.py"`).
-   - Press **Space** to capture face samples (~20–50 samples recommended under various lighting/angles).
-   - Press **Q** to finish and generate `face_model.xml`.
-2. **Configure Hardware**:
-   - Enter your Arduino COM port (e.g., `COM10`) and toggle **Arduino ON**.
-3. **Start Tracker**:
-   - Click **Start Tracker** (or run `python "custom face/face_tracker_lbph.py"`).
-   - The camera will detect your face, verify identity, and pan the servo motor.
+Press Q when finished. The program will train the LBPH model and create face_model.xml.
 
----
+Controls
 
-## Keyboard Controls
+Tracker:
 
-### Training Mode (`train_lbph.py`)
-- `Space`: Capture current face crop to `dataset/`
-- `Q`: Stop capture, train model, save `face_model.xml`
+Q — Quit
+C — Center servo
+R — Move to minimum angle
+I — Invert direction
+P — Pause/resume servo
+A / D — Manually move left/right
 
-### LBPH Tracker (`face_tracker_lbph.py`)
-- `Q`: Quit tracker
-- `C`: Center servo (90°)
-- `R`: Move servo to minimum angle (45°)
-- `I`: Invert left/right mapping
-- `P`: Pause/resume servo serial output
-- `A` / `D`: Manual nudge left / right
+The default servo range is 45°–135°, with 90° as the center position.
 
-### Basic Tracker (`face.py`)
-- `Q`: Quit tracker
-- `C`: Center servo (90°)
-- `R`: Move servo to 0°
-- `I`: Invert mapping
-- `P`: Pause output
-- `S`: Toggle servo enable
+Troubleshooting
 
----
+If cv2.face is missing, remove opencv-python and install opencv-contrib-python.
 
-## Configuration Reference
+If the model cannot be found, run the training program first.
 
-Settings can be adjusted in script headers or passed via environment variables:
+If the Arduino cannot connect, check the COM port and make sure the Arduino Serial Monitor is closed.
 
-| Setting / Variable | Description | Default |
-|--------------------|-------------|---------|
-| `FACE_TRACKER_USE_ARDUINO` | Enable or disable serial output | `0` / `1` |
-| `FACE_TRACKER_COM_PORT` | Target serial port | `COM10` |
-| `SERVO_MIN` / `SERVO_MAX` | Min/max tracker angle range | `45` / `135` |
-| `CENTER` | Home angle | `90` |
-| `DEADZONE_PCT` | Deadzone fraction of frame width | `0.04` |
+If the servo jitters or the Arduino resets, use a separate 5V power supply for the servo and connect the grounds together.
 
----
+License
 
-## Troubleshooting
+MIT License
 
-- **`AttributeError: module 'cv2' has no attribute 'face'`**
-  - Uninstall `opencv-python` and install `opencv-contrib-python`.
-- **`Model file not found`**
-  - Run the trainer (`train_lbph.py`) and capture samples before launching the LBPH tracker.
-- **Serial / COM Port Error**
-  - Close the Arduino IDE Serial Monitor before starting the tracker, and double-check the COM port in Windows Device Manager (**Ports (COM & LPT)**).
-- **Servo Stuttering or Board Resetting**
-  - Servos draw high peak currents. Use an external 5V power supply and connect its ground to Arduino GND.
-
----
-
-## License & Links
-
-- **License**: [MIT License](LICENSE)
-- **Repository**: [vash-codex/Servo-Facial-Tracking](https://github.com/vash-codex/Servo-Facial-Tracking)
-
+Repository: vash-codex/Servo-Facial-Tracking
