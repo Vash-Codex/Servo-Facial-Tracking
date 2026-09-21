@@ -28,20 +28,31 @@ def _dispatch_submode ()->bool :
                 except Exception :
                     pass 
 
-    if mode =="train":
-        import train_lbph 
-        train_lbph .main ()
-    elif mode =="lbph":
-        import face_tracker_lbph 
-        face_tracker_lbph .main ()
-    elif mode =="basic":
-        import face as face_mod 
-        face_mod .main ()
-    else :
-        print (f"[ERROR] Unknown mode: {mode!r}",file =sys .stderr )
-        sys .exit (1 )
+    if getattr(sys, "frozen", False):
+        _base = Path(sys.executable).resolve().parent
+    else:
+        _base = Path(__file__).resolve().parent
+    _custom = str(_base / "custom face")
+    if _custom not in sys.path:
+        sys.path.insert(0, _custom)
+    _base_str = str(_base)
+    if _base_str not in sys.path:
+        sys.path.insert(0, _base_str)
 
-    sys .exit (0 )
+    if mode == "train":
+        import train_lbph
+        train_lbph.main()
+    elif mode == "lbph":
+        import face_tracker_lbph
+        face_tracker_lbph.main()
+    elif mode == "basic":
+        import face as face_mod
+        face_mod.main()
+    else:
+        print(f"[ERROR] Unknown mode: {mode!r}", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(0)
 
 
 if _dispatch_submode ():
