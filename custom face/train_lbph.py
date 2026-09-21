@@ -73,21 +73,31 @@ class FaceCapture :
         self .cap =None 
         self .detector =None 
         self .count =0 
+        self .next_index =0 
         self .duplicates_skipped =0 
         self .last_face =None 
+
+    def _next_image_index (self )->int :
+        highest =-1 
+        for path in self .config .dataset_dir .glob ("user_*.jpg"):
+            try :
+                highest =max (highest ,int (path .stem .split ("_")[-1 ]))
+            except ValueError :
+                continue 
+        return highest +1 
 
     def initialize (self )->bool :
 
         try :
 
             self .config .dataset_dir .mkdir (parents =True ,exist_ok =True )
+            self .next_index =self ._next_image_index ()
             logger .info (f"Dataset directory: {self.config.dataset_dir}")
 
 
-            try :
-                self .cap =cv2 .VideoCapture (0 ,cv2 .CAP_DSHOW )
-            except Exception :
-                logger .info ("DirectShow not available, using default backend")
+            self .cap =cv2 .VideoCapture (0 ,cv2 .CAP_DSHOW )
+            if not self .cap .isOpened ():
+                self .cap .release ()
                 self .cap =cv2 .VideoCapture (0 )
 
             if not self .cap .isOpened ():
@@ -182,10 +192,11 @@ class FaceCapture :
             face_resized =cv2 .resize (face ,self .config .face_size )
 
 
-            filename =f"user_{self.count:04d}.jpg"
+            filename =f"user_{self.next_index:04d}.jpg"
             filepath =self .config .dataset_dir /filename 
             cv2 .imwrite (str (filepath ),face_resized )
 
+            self .next_index +=1 
             self .count +=1 
             self .last_face =face .copy ()
             logger .info (f"Captured image {self.count}")

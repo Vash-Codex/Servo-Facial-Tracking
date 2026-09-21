@@ -154,6 +154,7 @@ class TrackerConfig:
     detect_scale: float = 0.5
     detect_every_n: int = 2
     min_face_size: Tuple[int, int] = (30, 30)
+    face_size: Tuple[int, int] = (200, 200)
 
     position_history_size: int = 5
     face_lost_threshold: int = 10
@@ -432,6 +433,7 @@ class FaceTracker:
 
     def _recognize_face(self, face_gray: np.ndarray) -> Tuple[Optional[int], Optional[float]]:
         try:
+            face_gray = cv2.resize(face_gray, self.config.face_size)
             label, confidence = self.recognizer.predict(face_gray)
             return label, confidence
         except Exception as e:

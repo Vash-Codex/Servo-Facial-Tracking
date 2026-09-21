@@ -39,6 +39,26 @@ def get_cascade_path(filename: str = "haarcascade_frontalface_default.xml") -> s
     return os.path.join(getattr(cv2.data, "haarcascades", ""), filename)
 
 
+def open_camera(index=0):
+    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(index)
+    if cap.isOpened():
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+        for _ in range(5):
+            ok, _ = cap.read()
+            if ok:
+                return cap
+        cap.release()
+    return None
+
+
 try:
     import serial
     from serial.tools import list_ports
@@ -577,9 +597,9 @@ def main():
     else:
         print("[INFO] Arduino access disabled. Running in camera-only mode.")
 
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        raise RuntimeError("Camera not found")
+    cap = open_camera(0)
+    if cap is None:
+        raise RuntimeError("Camera not found or cannot be opened")
 
     cascade_path = get_cascade_path("haarcascade_frontalface_default.xml")
     face_cascade = cv2.CascadeClassifier(cascade_path)

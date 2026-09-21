@@ -1,3 +1,4 @@
+#include <Servo.h>
 
 Servo myservo;
 
@@ -5,7 +6,7 @@ void setup() {
   Serial.begin(9600);
   myservo.attach(9);
   myservo.write(90);
-  Serial.println("Send angle (0–180):");
+  Serial.println("Send angle (0-180):");
 }
 
 void loop() {
